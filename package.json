@@ -1,5 +1,5 @@
 {
-  "name": "home-skill",
+  "name": "node-red-smart-home-skill-v3-lambda",
   "version": "0.0.1",
   "description": "",
   "main": "index.js",
@@ -8,9 +8,9 @@
     "package": "zip -r home-skill.zip index.js node_modules",
     "publish": "aws lambda update-function-code --function-name Node-RED --zip-file fileb://home-skill-lambda.zip"
   },
-  "author": "hardillb@gmail.com",
+  "author": "chrismbradford@gmail.com",
   "license": "Apache-2.0",
   "dependencies": {
-    "request": "^2.76.0"
+    "request": "^2.88.0"
   }
 }
