@@ -193,9 +193,9 @@ function command(event, context, callback) {
             if (namespace == "Alexa.InputController") {
                 var contextResult = {
                     "properties": [{
-                        "namespace" : namespace,
+                        "namespace" : "Alexa.InputController",
                         "name": "input",
-                        "value": event.directive.payload.value,
+                        "value": event.directive.payload.input,
                         "timeOfSample": dt.toISOString(),
                         "uncertaintyInMilliseconds": 50
                     }]
@@ -236,8 +236,9 @@ function command(event, context, callback) {
                     };
                 }
                 else if (name == "SetTargetTemperature") {
-                    if (event.directive.payload.targetSetpoint.value > 0) {var mode = "HEAT"};
-                    if (event.directive.payload.targetSetpoint.value > 0) {var mode = "COOL"};
+                    // if (event.directive.payload.targetSetpoint.value > 0) {var mode = "HEAT"};
+                    // if (event.directive.payload.targetSetpoint.value > 0) {var mode = "COOL"};
+                    var mode = "HEAT"
                     var targetSetPointValue = {
                         "value": event.directive.payload.targetSetpoint.value,
                         "scale": event.directive.payload.targetSetpoint.scale
@@ -271,7 +272,7 @@ function command(event, context, callback) {
             }
 
             // Default Response Format (payload is empty)
-            if (!namespace == "Alexa.SceneController"){
+            if (namespace != "Alexa.SceneController"){
                 // Compile Final Response Message
                 var response = {
                     context: contextResult,
