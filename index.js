@@ -203,6 +203,7 @@ function command(event, context, callback) {
                         "timeOfSample": dt.toISOString(),
                         "uncertaintyInMilliseconds": 50
                     }]
+                };
             }
 
             // Build ColorTemperatureController Response Context
