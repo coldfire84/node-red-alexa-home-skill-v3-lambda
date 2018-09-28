@@ -1,4 +1,5 @@
 var request = require('request');
+var debug = false;
 
 exports.handler = function(event, context, callback) {
     //log("Entry", event);
@@ -8,7 +9,15 @@ exports.handler = function(event, context, callback) {
         discover(event, context, callback);
     } 
     // Add options to include other directives
-    else if (event.directive.header.namespace === 'Alexa.PowerController' || event.directive.header.namespace === 'Alexa.PlaybackController' || event.directive.header.namespace === 'Alexa.StepSpeaker' || event.directive.header.namespace === 'Alexa.SceneController' || event.directive.header.namespace === 'Alexa.InputController' || event.directive.header.namespace === 'Alexa.ThermostatController' || event.directive.header.namespace === 'BrightnessController' || event.directive.header.namespace === 'ColorController' || event.directive.header.namespace === 'ColorTemperatureController') {
+    else if (event.directive.header.namespace === 'Alexa.PowerController' 
+        || event.directive.header.namespace === 'Alexa.PlaybackController' 
+        || event.directive.header.namespace === 'Alexa.StepSpeaker' 
+        || event.directive.header.namespace === 'Alexa.SceneController' 
+        || event.directive.header.namespace === 'Alexa.InputController' 
+        || event.directive.header.namespace === 'Alexa.ThermostatController' 
+        || event.directive.header.namespace === 'Alexa.BrightnessController' 
+        || event.directive.header.namespace === 'Alexa.ColorController' 
+        || event.directive.header.namespace === 'Alexa.ColorTemperatureController') {
         command(event,context, callback);
     }
     // State Reporting
@@ -270,12 +279,19 @@ function command(event, context, callback) {
             // Build Brightness Controller Response Context
             if (namespace == "Alexa.BrightnessController" && (name == "AdjustBrightness" || name == "SetBrightness")) {
                 if (name == "AdjustBrightness") {
+                    var brightness;
+                    if (event.directive.payload.brightnessDelta < 0) {
+                        brightness = event.directive.payload.brightnessDelta + 100;
+                    }
+                    else {
+                        brightness = event.directive.payload.brightnessDelta;
+                    }
                     // Return Percentage Delta (NOT in-line with spec)
                     var contextResult = {
                         "properties": [{
                             "namespace" : "Alexa.BrightnessController",
                             "name": "brightness",
-                            "value": event.directive.payload.brightnessDelta,
+                            "value": brightness,
                             "timeOfSample": dt.toISOString(),
                             "uncertaintyInMilliseconds": 50
                         }]
