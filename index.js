@@ -8,7 +8,7 @@ exports.handler = function(event, context, callback) {
         discover(event, context, callback);
     } 
     // Add options to include other directives
-    else if (event.directive.header.namespace === 'Alexa.PowerController' || event.directive.header.namespace === 'Alexa.PlaybackController' || event.directive.header.namespace === 'Alexa.StepSpeaker' || event.directive.header.namespace === 'Alexa.SceneController' || event.directive.header.namespace === 'Alexa.InputController' || event.directive.header.namespace === 'Alexa.ThermostatController') {
+    else if (event.directive.header.namespace === 'Alexa.PowerController' || event.directive.header.namespace === 'Alexa.PlaybackController' || event.directive.header.namespace === 'Alexa.StepSpeaker' || event.directive.header.namespace === 'Alexa.SceneController' || event.directive.header.namespace === 'Alexa.InputController' || event.directive.header.namespace === 'Alexa.ThermostatController' || event.directive.header.namespace === 'BrightnessController' || event.directive.header.namespace === 'ColorController' || event.directive.header.namespace === 'ColorTemperatureController') {
         command(event,context, callback);
     }
     // State Reporting
