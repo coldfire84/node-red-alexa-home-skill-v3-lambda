@@ -189,6 +189,47 @@ function command(event, context, callback) {
                 };
             }
 
+            // ColorController
+            if (namespace == "Alexa.ColorController") {
+                var contextResult = {
+                    "properties": [{
+                        "namespace" : "Alexa.ColorController",
+                        "name": "color",
+                        "value": {
+                            "hue": event.directive.payload.color.hue,
+                            "saturation": event.directive.payload.color.saturation,
+                            "brightness": event.directive.payload.color.brightness
+                        },
+                        "timeOfSample": dt.toISOString(),
+                        "uncertaintyInMilliseconds": 50
+                    }]
+            }
+
+            // Build ColorTemperatureController Response Context
+            if (namespace == "Alexa.ColorTemperatureController") {
+                var strPayload = event.directive.payload.colorTemperatureInKelvin;
+                var colorTemp;
+                if (typeof strPayload != 'number') {
+                    if (strPayload == "warm" || strPayload == "warm white") {colorTemp = 2200};
+                    if (strPayload == "incandescent" || strPayload == "soft white") {colorTemp = 2700};
+                    if (strPayload == "white") {colorTemp = 4000};
+                    if (strPayload == "daylight" || strPayload == "daylight white") {colorTemp = 5500};
+                    if (strPayload == "cool" || strPayload == "cool white") {colorTemp = 7000};
+                }
+                else {
+                    colorTemp = event.directive.payload.colorTemperatureInKelvin;
+                }
+                var contextResult = {
+                    "properties": [{
+                        "namespace" : "Alexa.ColorTemperatureController",
+                        "name": "colorTemperatureInKelvin",
+                        "value": colorTemp,
+                        "timeOfSample": dt.toISOString(),
+                        "uncertaintyInMilliseconds": 50
+                    }]
+                }
+            }
+
             // Build Input Controller Response Context
             if (namespace == "Alexa.InputController") {
                 var contextResult = {
@@ -212,7 +253,7 @@ function command(event, context, callback) {
                 };
             }
 
-            // Build Scene Controller ActivationStarted Event
+            // Build Scene Controller Activation Started Event
             if (namespace == "Alexa.SceneController") {
                 header.namespace = "Alexa.SceneController";
                 header.name = "ActivationStarted";
@@ -225,11 +266,41 @@ function command(event, context, callback) {
                         };
             }
 
+            // Build Brightness Controller Response Context
+            if (namespace == "Alexa.BrightnessController" && (name == "AdjustBrightness" || name == "SetBrightness")) {
+                if (name == "AdjustBrightness") {
+                    // Return Percentage Delta (NOT in-line with spec)
+                    var contextResult = {
+                        "properties": [{
+                            "namespace" : "Alexa.BrightnessController",
+                            "name": "brightness",
+                            "value": event.directive.payload.brightnessDelta,
+                            "timeOfSample": dt.toISOString(),
+                            "uncertaintyInMilliseconds": 50
+                        }]
+                    };
+
+                }
+                if (name == "SetBrightness") {
+                    // Return Percentage
+                    var contextResult = {
+                        "properties": [{
+                            "namespace" : "Alexa.BrightnessController",
+                            "name": "brightness",
+                            "value": event.directive.payload.brightness,
+                            "timeOfSample": dt.toISOString(),
+                            "uncertaintyInMilliseconds": 50
+                        }]
+                    }                
+                };
+
+            }
+
             //Build Thermostat Controller - AdjustTargetTemperature/ SetTargetTemperature
             if (namespace == "Alexa.ThermostatController" && (name == "AdjustTargetTemperature" || name == "SetTargetTemperature")) {
                 if (name == "AdjustTargetTemperature") {
                     if (event.directive.payload.targetSetpointDelta.value > 0) {var mode = "HEAT"};
-                    if (event.directive.payload.targetSetpointDelta.value > 0) {var mode = "COOL"};
+                    if (event.directive.payload.targetSetpointDelta.value < 0) {var mode = "COOL"};
                         var targetSetPointValue = {
                         "value": event.directive.payload.targetSetpointDelta.value,
                         "scale": event.directive.payload.targetSetpointDelta.scale
