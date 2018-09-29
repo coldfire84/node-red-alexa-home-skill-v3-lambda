@@ -17,20 +17,23 @@ exports.handler = function(event, context, callback) {
         || event.directive.header.namespace === 'Alexa.ThermostatController' 
         || event.directive.header.namespace === 'Alexa.BrightnessController' 
         || event.directive.header.namespace === 'Alexa.ColorController' 
-        || event.directive.header.namespace === 'Alexa.ColorTemperatureController') {
+        || event.directive.header.namespace === 'Alexa.ColorTemperatureController'
+        || event.directive.header.namespace === 'Alexa.LockController') {
         command(event,context, callback);
     }
     // State Reporting
     else if (event.directive.header.namespace === 'Alexa' && event.directive.header.name === 'ReportState') {
         report(event, context, callback)
     }
-    else (log("Unhandled", event));
+    else {
+        if (debug == true) {log("Unhandled", event)};
+    }
 };
 
 // Tested/ working - NOTE - Original code was a fudge, just responded positively, this does the same for now!
 // Future aspiration: get device status ?via MQTT? and feedback via web service
 function report(event, context, callback) {
-    log("Report", event);
+    if (debug == true) {log("Report", event)};
     var endpointId = event.directive.endpoint.endpointId;
     var messageId = event.directive.header.messageId;
     var oauth_id = event.directive.endpoint.scope.token;
@@ -75,7 +78,7 @@ function report(event, context, callback) {
 
 // Tested/ working
 function discover(event, context, callback) {
-    log("Discover", JSON.stringify(event));
+    if (debug == true) {log("Discover", JSON.stringify(event))};
     if (event.directive.header.name === 'Discover') {
         var message_id = event.directive.header.messageId;
         var oauth_id = event.directive.payload.scope.token;
@@ -103,13 +106,14 @@ function discover(event, context, callback) {
                         payload: payload
                     }
                 };
-                log('Discovery', JSON.stringify(response));
+                if (debug == true) {log('Discovery', JSON.stringify(response))};
+
                 //context.succeed(response);
                 callback(null,response);
 
             // Updated for smart-home v3 skill syntax
             } else if (response.statusCode == 401) {
-                log('Discovery', "Auth failure");
+                if (debug == true) {log('Discovery', "Auth failure")};
                 var response = {
                     event: {
                         header:{
@@ -130,7 +134,7 @@ function discover(event, context, callback) {
             }
 
         }).on('error', function(error){
-            log('Discovery',"error: " + error);
+            if (debug == true) {log('Discovery',"error: " + error)};
             //other error
             //context.fail(error);
             callback(error, null);
@@ -141,7 +145,7 @@ function discover(event, context, callback) {
 // WIP to update to v3
 function command(event, context, callback) {
     // Post directive output to console
-    log('Command:', JSON.stringify(event));
+    if (debug == true) {log('Command:', JSON.stringify(event))};
     var oauth_id = event.directive.endpoint.scope.token;
 
     // Execute command
@@ -153,7 +157,7 @@ function command(event, context, callback) {
         timeout: 2000
     }, function(err, resp, data){
         if(err) {
-            log("command error", err);
+            if (debug == true) {log("command error", err)};
         }
         if (resp.statusCode === 200) {
             //log("Event", JSON.stringify(event));
@@ -402,7 +406,7 @@ function command(event, context, callback) {
                     }
                 };
             }
-            
+
             // SceneController Specific Event
             else {
                 var response = {
@@ -415,13 +419,13 @@ function command(event, context, callback) {
                 };                
             }
 
-            log("Response", JSON.stringify(response));
+            if (debug == true) {log("Response", JSON.stringify(response))};
 
             //context.succeed(response);
             callback(null, response);
 
         } else if (resp.statusCode === 401) {
-            log('command', "Auth failure");
+            if (debug == true) {log('command', "Auth failure")};
             var response = {
                 event: {
                     header:{
@@ -454,7 +458,7 @@ function command(event, context, callback) {
                 }
             }
         };
-        log("Command",JSON.stringify(response));
+        if (debug == true) {log("Command",JSON.stringify(response))};
         //context.fail(response);
         callback(error,null);
     });
