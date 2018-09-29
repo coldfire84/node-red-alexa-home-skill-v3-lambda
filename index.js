@@ -313,8 +313,10 @@ function command(event, context, callback) {
 
             }
 
-            //Build Thermostat Controller - AdjustTargetTemperature/ SetTargetTemperature
-            if (namespace == "Alexa.ThermostatController" && (name == "AdjustTargetTemperature" || name == "SetTargetTemperature")) {
+            //Build Thermostat Controller Response Context - AdjustTargetTemperature/ SetTargetTemperature
+            if (namespace == "Alexa.ThermostatController" 
+                && (name == "AdjustTargetTemperature" || name == "SetTargetTemperature" || name == "SetThermostatMode")) {
+
                 if (name == "AdjustTargetTemperature") {
                     if (event.directive.payload.targetSetpointDelta.value > 0) {var mode = "HEAT"};
                     if (event.directive.payload.targetSetpointDelta.value < 0) {var mode = "COOL"};
@@ -358,6 +360,35 @@ function command(event, context, callback) {
                     }]
                 };
             }
+            
+            // Build Thermostat Controller Response Context - SetThermostatMode
+            if (namespace == "Alexa.ThermostatController" && name == "SetThermostatMode") {
+                var contextResult = {
+                    "properties": [{
+                    "namespace": "Alexa.ThermostatController",
+                    "name": "thermostatMode",
+                    "value": event.directive.payload.thermostatMode.value,
+                    "timeOfSample": dt.toISOString(),
+                    "uncertaintyInMilliseconds": 500
+                  }]
+                };
+            }
+
+            // Build Lock Controller Response Context - SetThermostatMode
+            if (namespace == "Alexa.LockController") {
+                var lockState;
+                if (name == "Lock") {lockState = "LOCKED"};
+                if (name == "Unlock") {lockState = "UNLOCKED"};
+                var contextResult = {
+                    "properties": [{
+                    "namespace": "Alexa.LockController",
+                    "name": "lockState",
+                    "value": lockState,
+                    "timeOfSample": dt.toISOString(),
+                    "uncertaintyInMilliseconds": 500
+                    }]
+                };
+            }
 
             // Default Response Format (payload is empty)
             if (namespace != "Alexa.SceneController"){
@@ -370,7 +401,8 @@ function command(event, context, callback) {
                     payload: {}
                     }
                 };
-            } 
+            }
+            
             // SceneController Specific Event
             else {
                 var response = {
