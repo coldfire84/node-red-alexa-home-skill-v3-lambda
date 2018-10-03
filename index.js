@@ -159,16 +159,18 @@ function command(event, context, callback) {
         if(err) {
             if (debug == true) {log("command error", err)};
         }
+
+        //log("Event", JSON.stringify(event));
+        var endpointId = event.directive.endpoint.endpointId;
+        var messageId = event.directive.header.messageId;
+        var oauth_id = event.directive.endpoint.scope.token;
+        var correlationToken = event.directive.header.correlationToken;
+        var dt = new Date();
+        var name = event.directive.header.name;
+        var namespace = event.directive.header.namespace;
+
         if (resp.statusCode === 200) {
-            //log("Event", JSON.stringify(event));
-            var endpointId = event.directive.endpoint.endpointId;
-            var messageId = event.directive.header.messageId;
-            var oauth_id = event.directive.endpoint.scope.token;
-            var correlationToken = event.directive.header.correlationToken;
-            var dt = new Date();
-            var name = event.directive.header.name;
-            var namespace = event.directive.header.namespace;
-        
+       
             // Build Header
             var header = {
                 "namespace": "Alexa",
@@ -443,6 +445,35 @@ function command(event, context, callback) {
             //context.succeed(response);
             callback(null, response);
         }
+        // Temperature Out of Range Response
+        else if (resp.statusCode === 416) {
+            if (debug == true) {log('command', "Temperature out of Range Failure")};
+            var response = {
+                event: {
+                    header:{
+                        namespace: "Alexa",
+                        name: "ErrorResponse",
+                        messageId: messageId,
+                        correlationToken: correlationToken,
+                        payloadVersion: "3"
+                    },
+                    endpoint: {
+                        scope: {
+                            type: "BearerToken",
+                            BearerToken: oauth_id
+                           },
+                        endpointId : endpointId,
+                    },
+                    payload:{
+                        type: "TEMPERATURE_VALUE_OUT_OF_RANGE",
+                        message: "The requested temperature is out of range."
+                    }
+                }
+            };
+            //context.succeed(response);
+            callback(null, response);
+        }
+
     }).on('error', function(){
         var response = { 
             event: {
