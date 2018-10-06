@@ -445,9 +445,37 @@ function command(event, context, callback) {
             //context.succeed(response);
             callback(null, response);
         }
-        // Temperature Out of Range Response
+        // No Such Endpoint Response
+        else if (resp.statusCode === 404) {
+            if (debug == true) {log('command', "No such device or endpoint!")};
+            var response = {
+                event: {
+                    header:{
+                        namespace: "Alexa",
+                        name: "ErrorResponse",
+                        messageId: messageId,
+                        correlationToken: correlationToken,
+                        payloadVersion: "3"
+                    },
+                    endpoint: {
+                        scope: {
+                            type: "BearerToken",
+                            BearerToken: oauth_id
+                            },
+                        endpointId : endpointId,
+                    },
+                    payload:{
+                        type: "NO_SUCH_ENDPOINT	",
+                        message: "No such device or endpoint!"
+                    }
+                }
+            };
+            //context.succeed(response);
+            callback(null, response);
+        }
+        // TEMPERATURE_VALUE_OUT_OF_RANGE Response
         else if (resp.statusCode === 416) {
-            if (debug == true) {log('command', "Temperature out of Range Failure")};
+            if (debug == true) {log('command', "TEMPERATURE_VALUE_OUT_OF_RANGE Failure")};
             var response = {
                 event: {
                     header:{
@@ -473,7 +501,34 @@ function command(event, context, callback) {
             //context.succeed(response);
             callback(null, response);
         }
-
+        // VALUE_OUT_OF_RANGE Response
+        else if (resp.statusCode === 417) {
+            if (debug == true) {log('command', "VALUE_OUT_OF_RANGE Failure")};
+            var response = {
+                event: {
+                    header:{
+                        namespace: "Alexa",
+                        name: "ErrorResponse",
+                        messageId: messageId,
+                        correlationToken: correlationToken,
+                        payloadVersion: "3"
+                    },
+                    endpoint: {
+                        scope: {
+                            type: "BearerToken",
+                            BearerToken: oauth_id
+                           },
+                        endpointId : endpointId,
+                    },
+                    payload:{
+                        type: "VALUE_OUT_OF_RANGE",
+                        message: "The requested value is out of range."
+                    }
+                }
+            };
+            //context.succeed(response);
+            callback(null, response);
+        }
     }).on('error', function(){
         var response = { 
             event: {
