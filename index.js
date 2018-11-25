@@ -30,50 +30,29 @@ exports.handler = function(event, context, callback) {
     }
 };
 
-// Tested/ working - NOTE - Original code was a fudge, just responded positively, this does the same for now!
-// Future aspiration: get device status ?via MQTT? and feedback via web service
+// Modified to report state for devices enabled to do so
 function report(event, context, callback) {
-    if (debug == true) {log("Report", event)};
-    var endpointId = event.directive.endpoint.endpointId;
-    var messageId = event.directive.header.messageId;
-    var oauth_id = event.directive.endpoint.scope.token;
-    var correlationToken = event.directive.header.correlationToken;
-    var payloadVersion = "3";
-    var dt = new Date();
-    var response = {
-        context:{
-        properties:[
-            {
-                namespace: "Alexa.EndpointHealth",
-                name: "connectivity",
-                value: {
-                value:"OK"
-                },
-                timeOfSample: dt.toISOString(),
-                uncertaintyInMilliseconds: 0
-            }
-        ]
+    // Modify existing "report" Lambda function to use /api/v1/getstate WebAPI endpoint
+    if (debug == true) {log("ReportState", event)};
+    var oauth_id = event.directive.payload.scope.token;
+    // https request to the WebAPI to get deviceState
+    request.get('https://nr-alexav3.cb-net.co.uk/api/v1/getstate',{
+        auth: {
+            'bearer': oauth_id
         },
-        event:{
-        header:{
-            messageId: messageId,
-            correlationToken: correlationToken,
-            namespace:"Alexa",
-            name:"StateReport",
-            payloadVersion: payloadVersion
-        },
-        endpoint:{
-            scope:{
-                type: "BearerToken",
-                token: oauth_id
-            },
-            endpointId:endpointId,
-            cookie:{}
-        },
-        payload:{}
+        timeout: 2000
+    },function(err, response, body){
+        if (response.statusCode == 200) {
+            var response = JSON.parse(body);
+            if (debug == true) {log('ReportState', JSON.stringify(response))};
+            callback(null,response);
         }
-    }
-    context.succeed(response);
+    }).on('error', function(error){
+            if (debug == true) {log('ReportState',"error: " + error)};
+            //other error
+            //context.fail(error);
+            callback(error, null);
+        });
 }
 
 // Tested/ working
@@ -82,7 +61,7 @@ function discover(event, context, callback) {
     if (event.directive.header.name === 'Discover') {
         var message_id = event.directive.header.messageId;
         var oauth_id = event.directive.payload.scope.token;
-        //https request to the database
+        //https request to the WebAPI
         request.get('https://nr-alexav3.cb-net.co.uk/api/v1/devices',{
             auth: {
                 'bearer': oauth_id
