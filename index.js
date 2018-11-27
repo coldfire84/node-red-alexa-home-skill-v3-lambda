@@ -36,7 +36,7 @@ function report(event, context, callback) {
     if (debug == true) {log("ReportState", event)};
     var oauth_id = event.directive.payload.scope.token;
     // https request to the WebAPI to get deviceState
-    request.get('https://nr-alexav3.cb-net.co.uk/api/v1/getstate',{
+    request.get('https://nr-alexav3-dev.cb-net.co.uk/api/v1/getstate',{
         auth: {
             'bearer': oauth_id
         },
@@ -62,7 +62,7 @@ function discover(event, context, callback) {
         var message_id = event.directive.header.messageId;
         var oauth_id = event.directive.payload.scope.token;
         //https request to the WebAPI
-        request.get('https://nr-alexav3.cb-net.co.uk/api/v1/devices',{
+        request.get('https://nr-alexav3-dev.cb-net.co.uk/api/v1/devices',{
             auth: {
                 'bearer': oauth_id
             },
@@ -128,7 +128,7 @@ function command(event, context, callback) {
     var oauth_id = event.directive.endpoint.scope.token;
 
     // Execute command
-    request.post('https://nr-alexav3.cb-net.co.uk/api/v1/command',{
+    request.post('https://nr-alexav3-dev.cb-net.co.uk/api/v1/command',{
         json: event,
         auth: {
             bearer: oauth_id
