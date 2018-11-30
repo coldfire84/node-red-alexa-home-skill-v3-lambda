@@ -77,10 +77,30 @@
                 callback(null,response);
             }
         }).on('error', function(error){
-                if (debug == true) {log('ReportState',"error: " + error)};
+                if (debug == true) {
+                    log('ReportState',"error: " + error)
+                    var response = {
+                        "event": {
+                            "header": {
+                              "namespace": "Alexa",
+                              "name": "ErrorResponse",
+                              "messageId": messageId,
+                              "correlationToken": correlationToken,
+                              "payloadVersion": "3"
+                            },
+                            "endpoint":{
+                                "endpointId": endpointId
+                            },
+                            "payload": {
+                              "type": "BRIDGE_UNREACHABLE",
+                              "message": "Unable to reach endpoint because Node-RED Bridge appears to be offline"
+                            }
+                          }
+                        }
+                };
                 //other error
                 //context.fail(error);
-                callback(error, null);
+                callback(error, response);
             });
     }
 
@@ -136,16 +156,35 @@
                             }
                         }
                     };
-        
                     //context.succeed(response);
                     callback(null,response);
                 }
 
             }).on('error', function(error){
-                if (debug == true) {log('Discovery',"error: " + error)};
+                if (debug == true) {
+                    log('Discovery',"error: " + error)
+                    var response = {
+                        "event": {
+                            "header": {
+                              "namespace": "Alexa",
+                              "name": "ErrorResponse",
+                              "messageId": messageId,
+                              "correlationToken": correlationToken,
+                              "payloadVersion": "3"
+                            },
+                            "endpoint":{
+                                "endpointId": endpointId
+                            },
+                            "payload": {
+                              "type": "BRIDGE_UNREACHABLE",
+                              "message": "Unable to reach endpoint because Node-RED Bridge appears to be offline"
+                            }
+                          }
+                        }
+            };
                 //other error
                 //context.fail(error);
-                callback(error, null);
+                callback(error, response);
             });
         }
     }
@@ -340,9 +379,32 @@
                         };
                     }
                     else if (name == "SetTargetTemperature") {
-                        // if (event.directive.payload.targetSetpoint.value > 0) {var mode = "HEAT"};
-                        // if (event.directive.payload.targetSetpoint.value > 0) {var mode = "COOL"};
-                        var mode = "HEAT"
+                        // Get State, review output and use logic to determine HEAT or COOL
+                        // Use getstate to request current targetSetpoint
+                        var targetSetpoint;
+                        request.get('https://nr-alexav3-dev.cb-net.co.uk/api/v1/getstate/'+ endpointId,{
+                            auth: {
+                                'bearer': oauth_id
+                            },
+                            timeout: 2000
+                        },function(error, resp, dev){
+                            if (resp.statusCode == 200) {
+                                var properties = JSON.parse(dev);
+                                properties.forEach(function(element){ 
+                                    if (element.name == "targetSetpoint") {targetSetpoint = element.value.value}
+                                });
+                            }
+                            else {
+                                // Request Failed, targetSetPoint will be empty
+                            }                       
+                        }).on('error', function(error){
+                                // Request Failed, targetSetPoint will be empty
+                        });
+
+                        if (targetSetpoint && event.directive.payload.targetSetpoint.value > targetSetpoint) {var mode = "HEAT"}
+                        else if (targetSetpoint && event.directive.payload.targetSetpoint.value < targetSetpoint) {var mode = "COOL"}
+                        else {var mode = "HEAT"}
+
                         var targetSetPointValue = {
                             "value": event.directive.payload.targetSetpoint.value,
                             "scale": event.directive.payload.targetSetpoint.scale
@@ -547,7 +609,7 @@
                         payloadVersion: "3"
                     },
                     payload:{
-                        type: "NOT_IN_OPERATION",
+                        type: "ENDPOINT_UNREACHABLE",
                         message: "Target endpoint unavailable."
                     }
                 }
