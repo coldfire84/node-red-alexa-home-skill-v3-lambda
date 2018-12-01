@@ -8,7 +8,7 @@
             //log("Entry", event.directive.payload);
             discover(event, context, callback);
         } 
-        // Add options to include other directives
+        // Device-specific directives
         else if (event.directive.header.namespace === 'Alexa.PowerController' 
             || event.directive.header.namespace === 'Alexa.PlaybackController' 
             || event.directive.header.namespace === 'Alexa.StepSpeaker' 
@@ -19,7 +19,40 @@
             || event.directive.header.namespace === 'Alexa.ColorController' 
             || event.directive.header.namespace === 'Alexa.ColorTemperatureController'
             || event.directive.header.namespace === 'Alexa.LockController') {
-            command(event,context, callback);
+
+            // Pre-evaluation checks - any directives where you want to compare existing data should be called out here, i.e thermostatSetpoint
+            var evalData;
+            if (event.directive.header.namespace === 'Alexa.ThermostatController') {
+                // Get ThermostatController Endpoint State and pass to evalData
+                var endpointId = event.directive.endpoint.endpointId;
+                var oauth_id = event.directive.endpoint.scope.token;
+                request.get('https://nr-alexav3-dev.cb-net.co.uk/api/v1/getstate/'+ endpointId,{
+                    auth: {
+                        'bearer': oauth_id
+                    },
+                    timeout: 2000
+                },function(error, response, data){
+                    if (response.statusCode == 200) {
+                        var properties = JSON.parse(data);
+                        properties.forEach(function(element){
+                            if (element.name == "targetSetpoint") {evalData = element.value.value}
+                        });
+
+                        if (debug == true && evalData) {log("Thermostat evalData:" + evalData)};
+                        command(event, evalData, context, callback);    
+                    }
+                    else {
+                        // Request Failed, targetSetPoint will be empty
+                        if (debug == true) {log("Thermostat temp retrieval FAILED with response code:" + response.statusCode)};
+                        command(event, evalData, context, callback);
+                    }                       
+                }).on('error', function(error){
+                        // Request Failed, targetSetPoint will be empty
+                        if (debug == true) {log("Thermostat temp retrieval FAILED")};
+                        command(event, evalData, context, callback);
+                });
+            }
+            else {command(event, evalData, context, callback);}
         }
         // State Reporting
         else if (event.directive.header.namespace === 'Alexa' && event.directive.header.name === 'ReportState') {
@@ -30,7 +63,7 @@
         }
     };
 
-    // Modified to report state for devices enabled to do so
+    // Report State Function
     function report(event, context, callback) {
         // Modify existing "report" Lambda function to use /api/v1/getstate WebAPI endpoint
         if (debug == true) {log("ReportState", JSON.stringify(event))};
@@ -104,7 +137,7 @@
             });
     }
 
-    // Tested/ working
+    // Discover Function
     function discover(event, context, callback) {
         if (debug == true) {log("Discover", JSON.stringify(event))};
         if (event.directive.header.name === 'Discover') {
@@ -189,8 +222,8 @@
         }
     }
 
-    // WIP to update to v3
-    function command(event, context, callback) {
+    // Command Function
+    function command(event, evalData, context, callback) {
         // Post directive output to console
         if (debug == true) {log('Command:', JSON.stringify(event))};
         var oauth_id = event.directive.endpoint.scope.token;
@@ -379,35 +412,10 @@
                         };
                     }
                     else if (name == "SetTargetTemperature") {
-                        // Get State, review output and use logic to determine HEAT or COOL
-                        // Use getstate to request current targetSetpoint
-                        var targetSetpoint;
-                        request.get('https://nr-alexav3-dev.cb-net.co.uk/api/v1/getstate/'+ endpointId,{
-                            auth: {
-                                'bearer': oauth_id
-                            },
-                            timeout: 2000
-                        },function(error, resp, dev){
-                            if (resp.statusCode == 200) {
-                                var properties = JSON.parse(dev);
-                                properties.forEach(function(element){
-                                    if (debug == true) {log("Thermostat temp retrieval:" + JSON.stringify(dev))}
-                                    if (element.name == "targetSetpoint") {targetSetpoint = element.value.value}
-                                });
-                            }
-                            else {
-                                // Request Failed, targetSetPoint will be empty
-                                if (debug == true) {log("Thermostat temp retrieval FAILED with response code:" + resp.statusCode}
-                            }                       
-                        }).on('error', function(error){
-                                // Request Failed, targetSetPoint will be empty
-                                if (debug == true) {log("Thermostat temp retrieval FAILED"}
-                        });
-
-                        if (targetSetpoint && event.directive.payload.targetSetpoint.value > targetSetpoint) {var mode = "HEAT"}
-                        else if (targetSetpoint && event.directive.payload.targetSetpoint.value < targetSetpoint) {var mode = "COOL"}
+                        if (debug == true) {log("Provided evalData:" + evalData)};
+                        if (evalData && event.directive.payload.targetSetpoint.value > evalData) {var mode = "HEAT"}
+                        else if (evalData && event.directive.payload.targetSetpoint.value < evalData) {var mode = "COOL"}
                         else {var mode = "HEAT"}
-
                         var targetSetPointValue = {
                             "value": event.directive.payload.targetSetpoint.value,
                             "scale": event.directive.payload.targetSetpoint.scale
