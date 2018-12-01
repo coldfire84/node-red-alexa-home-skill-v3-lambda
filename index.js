@@ -390,15 +390,18 @@
                         },function(error, resp, dev){
                             if (resp.statusCode == 200) {
                                 var properties = JSON.parse(dev);
-                                properties.forEach(function(element){ 
+                                properties.forEach(function(element){
+                                    if (debug == true) {log("Thermostat temp retrieval:" + JSON.stringify(dev))}
                                     if (element.name == "targetSetpoint") {targetSetpoint = element.value.value}
                                 });
                             }
                             else {
                                 // Request Failed, targetSetPoint will be empty
+                                if (debug == true) {log("Thermostat temp retrieval FAILED with response code:" + resp.statusCode}
                             }                       
                         }).on('error', function(error){
                                 // Request Failed, targetSetPoint will be empty
+                                if (debug == true) {log("Thermostat temp retrieval FAILED"}
                         });
 
                         if (targetSetpoint && event.directive.payload.targetSetpoint.value > targetSetpoint) {var mode = "HEAT"}
