@@ -1,520 +1,186 @@
-    var request = require('request');
-    var debug = true;
+var request = require('request');
+var debug = true;
 
-    exports.handler = function(event, context, callback) {
-        //log("Entry", event);
-        // Discovery
-        if (event.directive.header.namespace === 'Alexa.Discovery') {
-            //log("Entry", event.directive.payload);
-            discover(event, context, callback);
-        } 
-        // Device-specific directives
-        else if (event.directive.header.namespace === 'Alexa.PowerController' 
-            || event.directive.header.namespace === 'Alexa.PlaybackController' 
-            || event.directive.header.namespace === 'Alexa.StepSpeaker' 
-            || event.directive.header.namespace === 'Alexa.SceneController' 
-            || event.directive.header.namespace === 'Alexa.InputController' 
-            || event.directive.header.namespace === 'Alexa.ThermostatController' 
-            || event.directive.header.namespace === 'Alexa.BrightnessController' 
-            || event.directive.header.namespace === 'Alexa.ColorController' 
-            || event.directive.header.namespace === 'Alexa.ColorTemperatureController'
-            || event.directive.header.namespace === 'Alexa.LockController') {
+exports.handler = function(event, context, callback) {
+    //log("Entry", event);
+    // Discovery
+    if (event.directive.header.namespace === 'Alexa.Discovery') {
+        //log("Entry", event.directive.payload);
+        discover(event, context, callback);
+    } 
+    // Device-specific directives
+    else if (event.directive.header.namespace === 'Alexa.PowerController' 
+        || event.directive.header.namespace === 'Alexa.PlaybackController' 
+        || event.directive.header.namespace === 'Alexa.StepSpeaker' 
+        || event.directive.header.namespace === 'Alexa.SceneController' 
+        || event.directive.header.namespace === 'Alexa.InputController' 
+        || event.directive.header.namespace === 'Alexa.ThermostatController' 
+        || event.directive.header.namespace === 'Alexa.BrightnessController' 
+        || event.directive.header.namespace === 'Alexa.ColorController' 
+        || event.directive.header.namespace === 'Alexa.ColorTemperatureController'
+        || event.directive.header.namespace === 'Alexa.LockController') {
 
-            // Pre-evaluation checks - any directives where you want to compare existing data should be called out here, i.e thermostatSetpoint
-            var evalData;
-            if (event.directive.header.namespace === 'Alexa.ThermostatController') {
-                // Get ThermostatController Endpoint State and pass to evalData
-                var endpointId = event.directive.endpoint.endpointId;
-                var oauth_id = event.directive.endpoint.scope.token;
-                request.get('https://nr-alexav3.cb-net.co.uk/api/v1/getstate/'+ endpointId,{
-                    auth: {
-                        'bearer': oauth_id
+        // Pre-evaluation checks - any directives where you want to compare existing data should be called out here, i.e thermostatSetpoint
+        var evalData;
+        if (event.directive.header.namespace === 'Alexa.ThermostatController') {
+            // Get ThermostatController Endpoint State and pass to evalData
+            var endpointId = event.directive.endpoint.endpointId;
+            var oauth_id = event.directive.endpoint.scope.token;
+            request.get("https://" + process.env.WEB_API_HOSTNAME +"/api/v1/getstate/"+ endpointId,{
+                auth: {
+                    'bearer': oauth_id
+                },
+                timeout: 2000
+            },function(error, response, data){
+                if (response.statusCode == 200) {
+                    var properties = JSON.parse(data);
+                    properties.forEach(function(element){
+                        if (element.name == "targetSetpoint") {evalData = element.value.value}
+                    });
+
+                    if (debug == true && evalData) {log("Thermostat evalData:" + evalData)};
+                    command(event, evalData, context, callback);    
+                }
+                else {
+                    // Request Failed, targetSetPoint will be empty
+                    if (debug == true) {log("Thermostat temp retrieval FAILED with response code:" + response.statusCode)};
+                    command(event, evalData, context, callback);
+                }                       
+            }).on('error', function(error){
+                    // Request Failed, targetSetPoint will be empty
+                    if (debug == true) {log("Thermostat temp retrieval FAILED")};
+                    command(event, evalData, context, callback);
+            });
+        }
+        else {command(event, evalData, context, callback);}
+    }
+    // State Reporting
+    else if (event.directive.header.namespace === 'Alexa' && event.directive.header.name === 'ReportState') {
+        report(event, context, callback)
+    }
+    else {
+        if (debug == true) {log("Unhandled", event)};
+    }
+};
+
+// Report State Function
+function report(event, context, callback) {
+    // Modify existing "report" Lambda function to use /api/v1/getstate WebAPI endpoint
+    if (debug == true) {log("ReportState", JSON.stringify(event))};
+    var oauth_id = event.directive.endpoint.scope.token;
+    var endpointId = event.directive.endpoint.endpointId;
+    var messageId = event.directive.header.messageId;
+    var correlationToken = event.directive.header.correlationToken;
+    // https request to the WebAPI to get deviceState
+    request.get("https://" + process.env.WEB_API_HOSTNAME + "/api/v1/getstate/"+ endpointId,{
+        auth: {
+            'bearer': oauth_id
+        },
+        timeout: 2000
+    },function(err, response, body){
+        if (response.statusCode == 200) {
+            var properties = JSON.parse(body);
+            if (debug == true) {log('ReportState', JSON.stringify(response))};
+            if (debug == true) {log('ReportState', JSON.stringify(properties))};
+            // Build RequestState Response
+            var response = {};
+            response.event = {
+                "header":{  
+                    "messageId":messageId,
+                    "correlationToken":correlationToken,
+                    "namespace":"Alexa",
+                    "name":"StateReport",
+                    "payloadVersion":"3"
+                },
+                "endpoint":{
+                    "scope": {
+                        "type": "BearerToken",
+                        "token": oauth_id
                     },
-                    timeout: 2000
-                },function(error, response, data){
-                    if (response.statusCode == 200) {
-                        var properties = JSON.parse(data);
-                        properties.forEach(function(element){
-                            if (element.name == "targetSetpoint") {evalData = element.value.value}
-                        });
+                "endpointId":endpointId,
+                "cookie": {}
+                }
+            }    
+            response.context = {};
+            response.context.properties = properties;
+            response.payload = {};       
+            
+            if (debug == true) {log('ReportState Response', JSON.stringify(response))};
 
-                        if (debug == true && evalData) {log("Thermostat evalData:" + evalData)};
-                        command(event, evalData, context, callback);    
+            callback(null,response);
+        }
+    }).on('error', function(error){
+            if (debug == true) {
+                log('ReportState',"error: " + error)
+                var response = {
+                    "event": {
+                        "header": {
+                          "namespace": "Alexa",
+                          "name": "ErrorResponse",
+                          "messageId": messageId,
+                          "correlationToken": correlationToken,
+                          "payloadVersion": "3"
+                        },
+                        "endpoint":{
+                            "endpointId": endpointId
+                        },
+                        "payload": {
+                          "type": "BRIDGE_UNREACHABLE",
+                          "message": "Unable to reach endpoint because Node-RED Bridge appears to be offline"
+                        }
+                      }
                     }
-                    else {
-                        // Request Failed, targetSetPoint will be empty
-                        if (debug == true) {log("Thermostat temp retrieval FAILED with response code:" + response.statusCode)};
-                        command(event, evalData, context, callback);
-                    }                       
-                }).on('error', function(error){
-                        // Request Failed, targetSetPoint will be empty
-                        if (debug == true) {log("Thermostat temp retrieval FAILED")};
-                        command(event, evalData, context, callback);
-                });
-            }
-            else {command(event, evalData, context, callback);}
-        }
-        // State Reporting
-        else if (event.directive.header.namespace === 'Alexa' && event.directive.header.name === 'ReportState') {
-            report(event, context, callback)
-        }
-        else {
-            if (debug == true) {log("Unhandled", event)};
-        }
-    };
+            };
+            //other error
+            //context.fail(error);
+            callback(error, response);
+        });
+}
 
-    // Report State Function
-    function report(event, context, callback) {
-        // Modify existing "report" Lambda function to use /api/v1/getstate WebAPI endpoint
-        if (debug == true) {log("ReportState", JSON.stringify(event))};
-        var oauth_id = event.directive.endpoint.scope.token;
-        var endpointId = event.directive.endpoint.endpointId;
-        var messageId = event.directive.header.messageId;
-        var correlationToken = event.directive.header.correlationToken;
-        // https request to the WebAPI to get deviceState
-        request.get('https://nr-alexav3.cb-net.co.uk/api/v1/getstate/'+ endpointId,{
+// Discover Function
+function discover(event, context, callback) {
+    if (debug == true) {log("Discover", JSON.stringify(event))};
+    if (event.directive.header.name === 'Discover') {
+        var message_id = event.directive.header.messageId;
+        var oauth_id = event.directive.payload.scope.token;
+        //https request to the WebAPI
+        request.get("https://" + process.env.WEB_API_HOSTNAME + "/api/v1/devices",{
             auth: {
                 'bearer': oauth_id
             },
             timeout: 2000
         },function(err, response, body){
+            //log("Discover body", body);
+            // Updated for smart-home v3 skill syntax
             if (response.statusCode == 200) {
-                var properties = JSON.parse(body);
-                if (debug == true) {log('ReportState', JSON.stringify(response))};
-                if (debug == true) {log('ReportState', JSON.stringify(properties))};
-                // Build RequestState Response
-                var response = {};
-                response.event = {
-                    "header":{  
-                        "messageId":messageId,
-                        "correlationToken":correlationToken,
-                        "namespace":"Alexa",
-                        "name":"StateReport",
-                        "payloadVersion":"3"
-                    },
-                    "endpoint":{
-                        "scope": {
-                            "type": "BearerToken",
-                            "token": oauth_id
-                        },
-                    "endpointId":endpointId,
-                    "cookie": {}
-                    }
-                }    
-                response.context = {};
-                response.context.properties = properties;
-                response.payload = {};       
-                
-                if (debug == true) {log('ReportState Response', JSON.stringify(response))};
-
-                callback(null,response);
-            }
-        }).on('error', function(error){
-                if (debug == true) {
-                    log('ReportState',"error: " + error)
-                    var response = {
-                        "event": {
-                            "header": {
-                              "namespace": "Alexa",
-                              "name": "ErrorResponse",
-                              "messageId": messageId,
-                              "correlationToken": correlationToken,
-                              "payloadVersion": "3"
-                            },
-                            "endpoint":{
-                                "endpointId": endpointId
-                            },
-                            "payload": {
-                              "type": "BRIDGE_UNREACHABLE",
-                              "message": "Unable to reach endpoint because Node-RED Bridge appears to be offline"
-                            }
-                          }
-                        }
+                var payload = {
+                    endpoints: JSON.parse(body)
                 };
-                //other error
-                //context.fail(error);
-                callback(error, response);
-            });
-    }
-
-    // Discover Function
-    function discover(event, context, callback) {
-        if (debug == true) {log("Discover", JSON.stringify(event))};
-        if (event.directive.header.name === 'Discover') {
-            var message_id = event.directive.header.messageId;
-            var oauth_id = event.directive.payload.scope.token;
-            //https request to the WebAPI
-            request.get('https://nr-alexav3.cb-net.co.uk/api/v1/devices',{
-                auth: {
-                    'bearer': oauth_id
-                },
-                timeout: 2000
-            },function(err, response, body){
-                //log("Discover body", body);
-                // Updated for smart-home v3 skill syntax
-                if (response.statusCode == 200) {
-                    var payload = {
-                        endpoints: JSON.parse(body)
-                    };
-                    var response = {
-                        event:{
-                            header:{
-                                namespace: "Alexa.Discovery",
-                                name: "Discover.Response",
-                                payloadVersion: "3",
-                                messageId: message_id
-                            },
-                            payload: payload
-                        }
-                    };
-                    if (debug == true) {log('Discovery', JSON.stringify(response))};
-
-                    //context.succeed(response);
-                    callback(null,response);
-
-                // Updated for smart-home v3 skill syntax
-                } else if (response.statusCode == 401) {
-                    if (debug == true) {log('Discovery', "Auth failure")};
-                    var response = {
-                        event: {
-                            header:{
-                                namespace: "Alexa",
-                                name: "ErrorResponse",
-                                messageId: message_id,
-                                payloadVersion: "3"
-                            },
-                            payload:{
-                                type: "INVALID_AUTHORIZATION_CREDENTIAL",
-                                message: "Authentication failure."
-                            }
-                        }
-                    };
-                    //context.succeed(response);
-                    callback(null,response);
-                }
-
-            }).on('error', function(error){
-                if (debug == true) {
-                    log('Discovery',"error: " + error)
-                    var response = {
-                        "event": {
-                            "header": {
-                              "namespace": "Alexa",
-                              "name": "ErrorResponse",
-                              "messageId": messageId,
-                              "correlationToken": correlationToken,
-                              "payloadVersion": "3"
-                            },
-                            "endpoint":{
-                                "endpointId": endpointId
-                            },
-                            "payload": {
-                              "type": "BRIDGE_UNREACHABLE",
-                              "message": "Unable to reach endpoint because Node-RED Bridge appears to be offline"
-                            }
-                          }
-                        }
-            };
-                //other error
-                //context.fail(error);
-                callback(error, response);
-            });
-        }
-    }
-
-    // Command Function
-    function command(event, evalData, context, callback) {
-        // Post directive output to console
-        if (debug == true) {log('Command:', JSON.stringify(event))};
-        var oauth_id = event.directive.endpoint.scope.token;
-
-        // Execute command
-        request.post('https://nr-alexav3.cb-net.co.uk/api/v1/command',{
-            json: event,
-            auth: {
-                bearer: oauth_id
-            },
-            timeout: 2000
-        }, function(err, resp, data){
-            if(err) {
-                if (debug == true) {log("command error", err)};
-            }
-
-            //log("Event", JSON.stringify(event));
-            var endpointId = event.directive.endpoint.endpointId;
-            var messageId = event.directive.header.messageId;
-            var oauth_id = event.directive.endpoint.scope.token;
-            var correlationToken = event.directive.header.correlationToken;
-            var dt = new Date();
-            var name = event.directive.header.name;
-            var namespace = event.directive.header.namespace;
-
-            if (resp.statusCode === 200) {
-        
-                // Build Header
-                var header = {
-                    "namespace": "Alexa",
-                    "name": "Response",
-                    "payloadVersion": "3",
-                    "messageId": messageId + "-R",
-                    "correlationToken": correlationToken
-                }
-
-                // Build Default Endpoint Response
-                var endpoint = {
-                    "scope": {
-                        "type": "BearerToken",
-                        "token": oauth_id
-                    },
-                    "endpointId": endpointId
-                }
-            
-                // Build PowerController Response Context
-                if (namespace == "Alexa.PowerController") {
-                    if (name == "TurnOn") {var newState = "ON"};
-                    if (name == "TurnOff") {var newState = "OFF"};
-                    var contextResult = {
-                        "properties": [{
-                            "namespace": "Alexa.PowerController",
-                            "name": "powerState",
-                            "value": newState,
-                            "timeOfSample": dt.toISOString(),
-                            "uncertaintyInMilliseconds": 50
-                        }]
-                    };
-                }
-
-                // ColorController
-                if (namespace == "Alexa.ColorController") {
-                    var contextResult = {
-                        "properties": [{
-                            "namespace" : "Alexa.ColorController",
-                            "name": "color",
-                            "value": {
-                                "hue": event.directive.payload.color.hue,
-                                "saturation": event.directive.payload.color.saturation,
-                                "brightness": event.directive.payload.color.brightness
-                            },
-                            "timeOfSample": dt.toISOString(),
-                            "uncertaintyInMilliseconds": 50
-                        }]
-                    };
-                }
-
-                // Build ColorTemperatureController Response Context
-                if (namespace == "Alexa.ColorTemperatureController") {
-                    var strPayload = event.directive.payload.colorTemperatureInKelvin;
-                    var colorTemp;
-                    if (typeof strPayload != 'number') {
-                        if (strPayload == "warm" || strPayload == "warm white") {colorTemp = 2200};
-                        if (strPayload == "incandescent" || strPayload == "soft white") {colorTemp = 2700};
-                        if (strPayload == "white") {colorTemp = 4000};
-                        if (strPayload == "daylight" || strPayload == "daylight white") {colorTemp = 5500};
-                        if (strPayload == "cool" || strPayload == "cool white") {colorTemp = 7000};
-                    }
-                    else {
-                        colorTemp = event.directive.payload.colorTemperatureInKelvin;
-                    }
-                    var contextResult = {
-                        "properties": [{
-                            "namespace" : "Alexa.ColorTemperatureController",
-                            "name": "colorTemperatureInKelvin",
-                            "value": colorTemp,
-                            "timeOfSample": dt.toISOString(),
-                            "uncertaintyInMilliseconds": 50
-                        }]
-                    }
-                }
-
-                // Build Input Controller Response Context
-                if (namespace == "Alexa.InputController") {
-                    var contextResult = {
-                        "properties": [{
-                            "namespace" : "Alexa.InputController",
-                            "name": "input",
-                            "value": event.directive.payload.input,
-                            "timeOfSample": dt.toISOString(),
-                            "uncertaintyInMilliseconds": 50
-                        }]
-                    }
-                    endpoint = {
-                        "endpointId": endpointId
-                    }
-                }
-
-                // Build PlaybackController/ StepSpeaker Response Context
-                if (namespace == "Alexa.PlaybackController" || namespace == "Alexa.StepSpeaker") {
-                    var contextResult = {
-                        "properties": []
-                    };
-                }
-
-                // Build Scene Controller Activation Started Event
-                if (namespace == "Alexa.SceneController") {
-                    header.namespace = "Alexa.SceneController";
-                    header.name = "ActivationStarted";
-                    var contextResult = {};
-                    var payload = {
-                            "cause" : {
-                                "type" : "VOICE_INTERACTION"
-                                },
-                            "timestamp": dt.toISOString()
-                            };
-                }
-
-                // Build Brightness Controller Response Context
-                if (namespace == "Alexa.BrightnessController" && (name == "AdjustBrightness" || name == "SetBrightness")) {
-                    if (name == "AdjustBrightness") {
-                        var brightness;
-                        if (event.directive.payload.brightnessDelta < 0) {
-                            brightness = event.directive.payload.brightnessDelta + 100;
-                        }
-                        else {
-                            brightness = event.directive.payload.brightnessDelta;
-                        }
-                        // Return Percentage Delta (NOT in-line with spec)
-                        var contextResult = {
-                            "properties": [{
-                                "namespace" : "Alexa.BrightnessController",
-                                "name": "brightness",
-                                "value": brightness,
-                                "timeOfSample": dt.toISOString(),
-                                "uncertaintyInMilliseconds": 50
-                            }]
-                        };
-
-                    }
-                    if (name == "SetBrightness") {
-                        // Return Percentage
-                        var contextResult = {
-                            "properties": [{
-                                "namespace" : "Alexa.BrightnessController",
-                                "name": "brightness",
-                                "value": event.directive.payload.brightness,
-                                "timeOfSample": dt.toISOString(),
-                                "uncertaintyInMilliseconds": 50
-                            }]
-                        }                
-                    };
-
-                }
-
-                //Build Thermostat Controller Response Context - AdjustTargetTemperature/ SetTargetTemperature
-                if (namespace == "Alexa.ThermostatController" 
-                    && (name == "AdjustTargetTemperature" || name == "SetTargetTemperature" || name == "SetThermostatMode")) {
-
-                    if (name == "AdjustTargetTemperature") {
-                        if (event.directive.payload.targetSetpointDelta.value > 0) {var mode = "HEAT"};
-                        if (event.directive.payload.targetSetpointDelta.value < 0) {var mode = "COOL"};
-                            var targetSetPointValue = {
-                            "value": event.directive.payload.targetSetpointDelta.value,
-                            "scale": event.directive.payload.targetSetpointDelta.scale
-                        };
-                    }
-                    else if (name == "SetTargetTemperature") {
-                        if (debug == true) {log("Provided evalData:" + evalData)};
-                        if (evalData && event.directive.payload.targetSetpoint.value > evalData) {var mode = "HEAT"}
-                        else if (evalData && event.directive.payload.targetSetpoint.value < evalData) {var mode = "COOL"}
-                        else {var mode = "HEAT"}
-                        var targetSetPointValue = {
-                            "value": event.directive.payload.targetSetpoint.value,
-                            "scale": event.directive.payload.targetSetpoint.scale
-                        };
-                    }
-                    var contextResult = {
-                        "properties": [{
-                            "namespace": "Alexa.ThermostatController",
-                            "name": "targetSetpoint",
-                            "value": targetSetPointValue,
-                            "timeOfSample": dt.toISOString(),
-                            "uncertaintyInMilliseconds": 50
+                var response = {
+                    event:{
+                        header:{
+                            namespace: "Alexa.Discovery",
+                            name: "Discover.Response",
+                            payloadVersion: "3",
+                            messageId: message_id
                         },
-                        {
-                            "namespace": "Alexa.ThermostatController",
-                            "name": "thermostatMode",
-                            "value": mode,
-                            "timeOfSample": dt.toISOString(),
-                            "uncertaintyInMilliseconds": 50
-                        },
-                        {
-                            "namespace": "Alexa.EndpointHealth",
-                            "name": "connectivity",
-                            "value": {
-                                "value": "OK"
-                            },
-                            "timeOfSample": dt.toISOString(),
-                            "uncertaintyInMilliseconds": 50
-                        }]
-                    };
-                }
-                
-                // Build Thermostat Controller Response Context - SetThermostatMode
-                if (namespace == "Alexa.ThermostatController" && name == "SetThermostatMode") {
-                    var contextResult = {
-                        "properties": [{
-                        "namespace": "Alexa.ThermostatController",
-                        "name": "thermostatMode",
-                        "value": event.directive.payload.thermostatMode.value,
-                        "timeOfSample": dt.toISOString(),
-                        "uncertaintyInMilliseconds": 500
-                    }]
-                    };
-                }
-
-                // Build Lock Controller Response Context - SetThermostatMode
-                if (namespace == "Alexa.LockController") {
-                    var lockState;
-                    if (name == "Lock") {lockState = "LOCKED"};
-                    if (name == "Unlock") {lockState = "UNLOCKED"};
-                    var contextResult = {
-                        "properties": [{
-                        "namespace": "Alexa.LockController",
-                        "name": "lockState",
-                        "value": lockState,
-                        "timeOfSample": dt.toISOString(),
-                        "uncertaintyInMilliseconds": 500
-                        }]
-                    };
-                }
-
-                // Default Response Format (payload is empty)
-                if (namespace != "Alexa.SceneController"){
-                    // Compile Final Response Message
-                    var response = {
-                        context: contextResult,
-                        event: {
-                        header: header,
-                        endpoint: endpoint,
-                        payload: {}
-                        }
-                    };
-                }
-
-                // SceneController Specific Event
-                else {
-                    var response = {
-                        context: contextResult,
-                        event: {
-                        header: header,
-                        endpoint: endpoint,
                         payload: payload
-                        }
-                    };                
-                }
-
-                if (debug == true) {log("Response", JSON.stringify(response))};
+                    }
+                };
+                if (debug == true) {log('Discovery', JSON.stringify(response))};
 
                 //context.succeed(response);
-                callback(null, response);
+                callback(null,response);
 
-            } else if (resp.statusCode === 401) {
-                if (debug == true) {log('command', "Auth failure")};
+            // Updated for smart-home v3 skill syntax
+            } else if (response.statusCode == 401) {
+                if (debug == true) {log('Discovery', "Auth failure")};
                 var response = {
                     event: {
                         header:{
                             namespace: "Alexa",
                             name: "ErrorResponse",
-                            messageId: messageId,
+                            messageId: message_id,
                             payloadVersion: "3"
                         },
                         payload:{
@@ -524,94 +190,326 @@
                     }
                 };
                 //context.succeed(response);
-                callback(null, response);
+                callback(null,response);
             }
-            // No Such Endpoint Response
-            else if (resp.statusCode === 404) {
-                if (debug == true) {log('command', "No such device or endpoint!")};
+
+        }).on('error', function(error){
+            if (debug == true) {
+                log('Discovery',"error: " + error)
                 var response = {
-                    event: {
-                        header:{
-                            namespace: "Alexa",
-                            name: "ErrorResponse",
-                            messageId: messageId,
-                            correlationToken: correlationToken,
-                            payloadVersion: "3"
+                    "event": {
+                        "header": {
+                          "namespace": "Alexa",
+                          "name": "ErrorResponse",
+                          "messageId": messageId,
+                          "correlationToken": correlationToken,
+                          "payloadVersion": "3"
                         },
-                        endpoint: {
-                            scope: {
-                                type: "BearerToken",
-                                BearerToken: oauth_id
-                                },
-                            endpointId : endpointId,
+                        "endpoint":{
+                            "endpointId": endpointId
                         },
-                        payload:{
-                            type: "NO_SUCH_ENDPOINT	",
-                            message: "No such device or endpoint!"
+                        "payload": {
+                          "type": "BRIDGE_UNREACHABLE",
+                          "message": "Unable to reach endpoint because Node-RED Bridge appears to be offline"
                         }
+                      }
                     }
-                };
-                //context.succeed(response);
-                callback(null, response);
+        };
+            //other error
+            //context.fail(error);
+            callback(error, response);
+        });
+    }
+}
+
+// Command Function
+function command(event, evalData, context, callback) {
+    // Post directive output to console
+    if (debug == true) {log('Command:', JSON.stringify(event))};
+    var oauth_id = event.directive.endpoint.scope.token;
+
+    // Execute command
+    request.post("https://" + process.env.WEB_API_HOSTNAME + "/api/v1/command",{
+        json: event,
+        auth: {
+            bearer: oauth_id
+        },
+        timeout: 2000
+    }, function(err, resp, data){
+        if(err) {
+            if (debug == true) {log("command error", err)};
+        }
+
+        //log("Event", JSON.stringify(event));
+        var endpointId = event.directive.endpoint.endpointId;
+        var messageId = event.directive.header.messageId;
+        var oauth_id = event.directive.endpoint.scope.token;
+        var correlationToken = event.directive.header.correlationToken;
+        var dt = new Date();
+        var name = event.directive.header.name;
+        var namespace = event.directive.header.namespace;
+
+        if (resp.statusCode === 200) {
+    
+            // Build Header
+            var header = {
+                "namespace": "Alexa",
+                "name": "Response",
+                "payloadVersion": "3",
+                "messageId": messageId + "-R",
+                "correlationToken": correlationToken
             }
-            // TEMPERATURE_VALUE_OUT_OF_RANGE Response
-            else if (resp.statusCode === 416) {
-                if (debug == true) {log('command', "TEMPERATURE_VALUE_OUT_OF_RANGE Failure")};
-                var response = {
-                    event: {
-                        header:{
-                            namespace: "Alexa",
-                            name: "ErrorResponse",
-                            messageId: messageId,
-                            correlationToken: correlationToken,
-                            payloadVersion: "3"
+
+            // Build Default Endpoint Response
+            var endpoint = {
+                "scope": {
+                    "type": "BearerToken",
+                    "token": oauth_id
+                },
+                "endpointId": endpointId
+            }
+        
+            // Build PowerController Response Context
+            if (namespace == "Alexa.PowerController") {
+                if (name == "TurnOn") {var newState = "ON"};
+                if (name == "TurnOff") {var newState = "OFF"};
+                var contextResult = {
+                    "properties": [{
+                        "namespace": "Alexa.PowerController",
+                        "name": "powerState",
+                        "value": newState,
+                        "timeOfSample": dt.toISOString(),
+                        "uncertaintyInMilliseconds": 50
+                    }]
+                };
+            }
+
+            // ColorController
+            if (namespace == "Alexa.ColorController") {
+                var contextResult = {
+                    "properties": [{
+                        "namespace" : "Alexa.ColorController",
+                        "name": "color",
+                        "value": {
+                            "hue": event.directive.payload.color.hue,
+                            "saturation": event.directive.payload.color.saturation,
+                            "brightness": event.directive.payload.color.brightness
                         },
-                        endpoint: {
-                            scope: {
-                                type: "BearerToken",
-                                BearerToken: oauth_id
+                        "timeOfSample": dt.toISOString(),
+                        "uncertaintyInMilliseconds": 50
+                    }]
+                };
+            }
+
+            // Build ColorTemperatureController Response Context
+            if (namespace == "Alexa.ColorTemperatureController") {
+                var strPayload = event.directive.payload.colorTemperatureInKelvin;
+                var colorTemp;
+                if (typeof strPayload != 'number') {
+                    if (strPayload == "warm" || strPayload == "warm white") {colorTemp = 2200};
+                    if (strPayload == "incandescent" || strPayload == "soft white") {colorTemp = 2700};
+                    if (strPayload == "white") {colorTemp = 4000};
+                    if (strPayload == "daylight" || strPayload == "daylight white") {colorTemp = 5500};
+                    if (strPayload == "cool" || strPayload == "cool white") {colorTemp = 7000};
+                }
+                else {
+                    colorTemp = event.directive.payload.colorTemperatureInKelvin;
+                }
+                var contextResult = {
+                    "properties": [{
+                        "namespace" : "Alexa.ColorTemperatureController",
+                        "name": "colorTemperatureInKelvin",
+                        "value": colorTemp,
+                        "timeOfSample": dt.toISOString(),
+                        "uncertaintyInMilliseconds": 50
+                    }]
+                }
+            }
+
+            // Build Input Controller Response Context
+            if (namespace == "Alexa.InputController") {
+                var contextResult = {
+                    "properties": [{
+                        "namespace" : "Alexa.InputController",
+                        "name": "input",
+                        "value": event.directive.payload.input,
+                        "timeOfSample": dt.toISOString(),
+                        "uncertaintyInMilliseconds": 50
+                    }]
+                }
+                endpoint = {
+                    "endpointId": endpointId
+                }
+            }
+
+            // Build PlaybackController/ StepSpeaker Response Context
+            if (namespace == "Alexa.PlaybackController" || namespace == "Alexa.StepSpeaker") {
+                var contextResult = {
+                    "properties": []
+                };
+            }
+
+            // Build Scene Controller Activation Started Event
+            if (namespace == "Alexa.SceneController") {
+                header.namespace = "Alexa.SceneController";
+                header.name = "ActivationStarted";
+                var contextResult = {};
+                var payload = {
+                        "cause" : {
+                            "type" : "VOICE_INTERACTION"
                             },
-                            endpointId : endpointId,
-                        },
-                        payload:{
-                            type: "TEMPERATURE_VALUE_OUT_OF_RANGE",
-                            message: "The requested temperature is out of range."
-                        }
-                    }
-                };
-                //context.succeed(response);
-                callback(null, response);
+                        "timestamp": dt.toISOString()
+                        };
             }
-            // VALUE_OUT_OF_RANGE Response
-            else if (resp.statusCode === 417) {
-                if (debug == true) {log('command', "VALUE_OUT_OF_RANGE Failure")};
+
+            // Build Brightness Controller Response Context
+            if (namespace == "Alexa.BrightnessController" && (name == "AdjustBrightness" || name == "SetBrightness")) {
+                if (name == "AdjustBrightness") {
+                    var brightness;
+                    if (event.directive.payload.brightnessDelta < 0) {
+                        brightness = event.directive.payload.brightnessDelta + 100;
+                    }
+                    else {
+                        brightness = event.directive.payload.brightnessDelta;
+                    }
+                    // Return Percentage Delta (NOT in-line with spec)
+                    var contextResult = {
+                        "properties": [{
+                            "namespace" : "Alexa.BrightnessController",
+                            "name": "brightness",
+                            "value": brightness,
+                            "timeOfSample": dt.toISOString(),
+                            "uncertaintyInMilliseconds": 50
+                        }]
+                    };
+
+                }
+                if (name == "SetBrightness") {
+                    // Return Percentage
+                    var contextResult = {
+                        "properties": [{
+                            "namespace" : "Alexa.BrightnessController",
+                            "name": "brightness",
+                            "value": event.directive.payload.brightness,
+                            "timeOfSample": dt.toISOString(),
+                            "uncertaintyInMilliseconds": 50
+                        }]
+                    }                
+                };
+
+            }
+
+            //Build Thermostat Controller Response Context - AdjustTargetTemperature/ SetTargetTemperature
+            if (namespace == "Alexa.ThermostatController" 
+                && (name == "AdjustTargetTemperature" || name == "SetTargetTemperature" || name == "SetThermostatMode")) {
+
+                if (name == "AdjustTargetTemperature") {
+                    if (event.directive.payload.targetSetpointDelta.value > 0) {var mode = "HEAT"};
+                    if (event.directive.payload.targetSetpointDelta.value < 0) {var mode = "COOL"};
+                        var targetSetPointValue = {
+                        "value": event.directive.payload.targetSetpointDelta.value,
+                        "scale": event.directive.payload.targetSetpointDelta.scale
+                    };
+                }
+                else if (name == "SetTargetTemperature") {
+                    if (debug == true) {log("Provided evalData:" + evalData)};
+                    if (evalData && event.directive.payload.targetSetpoint.value > evalData) {var mode = "HEAT"}
+                    else if (evalData && event.directive.payload.targetSetpoint.value < evalData) {var mode = "COOL"}
+                    else {var mode = "HEAT"}
+                    var targetSetPointValue = {
+                        "value": event.directive.payload.targetSetpoint.value,
+                        "scale": event.directive.payload.targetSetpoint.scale
+                    };
+                }
+                var contextResult = {
+                    "properties": [{
+                        "namespace": "Alexa.ThermostatController",
+                        "name": "targetSetpoint",
+                        "value": targetSetPointValue,
+                        "timeOfSample": dt.toISOString(),
+                        "uncertaintyInMilliseconds": 50
+                    },
+                    {
+                        "namespace": "Alexa.ThermostatController",
+                        "name": "thermostatMode",
+                        "value": mode,
+                        "timeOfSample": dt.toISOString(),
+                        "uncertaintyInMilliseconds": 50
+                    },
+                    {
+                        "namespace": "Alexa.EndpointHealth",
+                        "name": "connectivity",
+                        "value": {
+                            "value": "OK"
+                        },
+                        "timeOfSample": dt.toISOString(),
+                        "uncertaintyInMilliseconds": 50
+                    }]
+                };
+            }
+            
+            // Build Thermostat Controller Response Context - SetThermostatMode
+            if (namespace == "Alexa.ThermostatController" && name == "SetThermostatMode") {
+                var contextResult = {
+                    "properties": [{
+                    "namespace": "Alexa.ThermostatController",
+                    "name": "thermostatMode",
+                    "value": event.directive.payload.thermostatMode.value,
+                    "timeOfSample": dt.toISOString(),
+                    "uncertaintyInMilliseconds": 500
+                }]
+                };
+            }
+
+            // Build Lock Controller Response Context - SetThermostatMode
+            if (namespace == "Alexa.LockController") {
+                var lockState;
+                if (name == "Lock") {lockState = "LOCKED"};
+                if (name == "Unlock") {lockState = "UNLOCKED"};
+                var contextResult = {
+                    "properties": [{
+                    "namespace": "Alexa.LockController",
+                    "name": "lockState",
+                    "value": lockState,
+                    "timeOfSample": dt.toISOString(),
+                    "uncertaintyInMilliseconds": 500
+                    }]
+                };
+            }
+
+            // Default Response Format (payload is empty)
+            if (namespace != "Alexa.SceneController"){
+                // Compile Final Response Message
                 var response = {
+                    context: contextResult,
                     event: {
-                        header:{
-                            namespace: "Alexa",
-                            name: "ErrorResponse",
-                            messageId: messageId,
-                            correlationToken: correlationToken,
-                            payloadVersion: "3"
-                        },
-                        endpoint: {
-                            scope: {
-                                type: "BearerToken",
-                                BearerToken: oauth_id
-                            },
-                            endpointId : endpointId,
-                        },
-                        payload:{
-                            type: "VALUE_OUT_OF_RANGE",
-                            message: "The requested value is out of range."
-                        }
+                    header: header,
+                    endpoint: endpoint,
+                    payload: {}
                     }
                 };
-                //context.succeed(response);
-                callback(null, response);
             }
-        }).on('error', function(){
-            var response = { 
+
+            // SceneController Specific Event
+            else {
+                var response = {
+                    context: contextResult,
+                    event: {
+                    header: header,
+                    endpoint: endpoint,
+                    payload: payload
+                    }
+                };                
+            }
+
+            if (debug == true) {log("Response", JSON.stringify(response))};
+
+            //context.succeed(response);
+            callback(null, response);
+
+        } else if (resp.statusCode === 401) {
+            if (debug == true) {log('command', "Auth failure")};
+            var response = {
                 event: {
                     header:{
                         namespace: "Alexa",
@@ -620,19 +518,121 @@
                         payloadVersion: "3"
                     },
                     payload:{
-                        type: "ENDPOINT_UNREACHABLE",
-                        message: "Target endpoint unavailable."
+                        type: "INVALID_AUTHORIZATION_CREDENTIAL",
+                        message: "Authentication failure."
                     }
                 }
             };
-            if (debug == true) {log("Command",JSON.stringify(response))};
-            //context.fail(response);
-            callback(error,null);
-        });
-    }
+            //context.succeed(response);
+            callback(null, response);
+        }
+        // No Such Endpoint Response
+        else if (resp.statusCode === 404) {
+            if (debug == true) {log('command', "No such device or endpoint!")};
+            var response = {
+                event: {
+                    header:{
+                        namespace: "Alexa",
+                        name: "ErrorResponse",
+                        messageId: messageId,
+                        correlationToken: correlationToken,
+                        payloadVersion: "3"
+                    },
+                    endpoint: {
+                        scope: {
+                            type: "BearerToken",
+                            BearerToken: oauth_id
+                            },
+                        endpointId : endpointId,
+                    },
+                    payload:{
+                        type: "NO_SUCH_ENDPOINT	",
+                        message: "No such device or endpoint!"
+                    }
+                }
+            };
+            //context.succeed(response);
+            callback(null, response);
+        }
+        // TEMPERATURE_VALUE_OUT_OF_RANGE Response
+        else if (resp.statusCode === 416) {
+            if (debug == true) {log('command', "TEMPERATURE_VALUE_OUT_OF_RANGE Failure")};
+            var response = {
+                event: {
+                    header:{
+                        namespace: "Alexa",
+                        name: "ErrorResponse",
+                        messageId: messageId,
+                        correlationToken: correlationToken,
+                        payloadVersion: "3"
+                    },
+                    endpoint: {
+                        scope: {
+                            type: "BearerToken",
+                            BearerToken: oauth_id
+                        },
+                        endpointId : endpointId,
+                    },
+                    payload:{
+                        type: "TEMPERATURE_VALUE_OUT_OF_RANGE",
+                        message: "The requested temperature is out of range."
+                    }
+                }
+            };
+            //context.succeed(response);
+            callback(null, response);
+        }
+        // VALUE_OUT_OF_RANGE Response
+        else if (resp.statusCode === 417) {
+            if (debug == true) {log('command', "VALUE_OUT_OF_RANGE Failure")};
+            var response = {
+                event: {
+                    header:{
+                        namespace: "Alexa",
+                        name: "ErrorResponse",
+                        messageId: messageId,
+                        correlationToken: correlationToken,
+                        payloadVersion: "3"
+                    },
+                    endpoint: {
+                        scope: {
+                            type: "BearerToken",
+                            BearerToken: oauth_id
+                        },
+                        endpointId : endpointId,
+                    },
+                    payload:{
+                        type: "VALUE_OUT_OF_RANGE",
+                        message: "The requested value is out of range."
+                    }
+                }
+            };
+            //context.succeed(response);
+            callback(null, response);
+        }
+    }).on('error', function(){
+        var response = { 
+            event: {
+                header:{
+                    namespace: "Alexa",
+                    name: "ErrorResponse",
+                    messageId: messageId,
+                    payloadVersion: "3"
+                },
+                payload:{
+                    type: "ENDPOINT_UNREACHABLE",
+                    message: "Target endpoint unavailable."
+                }
+            }
+        };
+        if (debug == true) {log("Command",JSON.stringify(response))};
+        //context.fail(response);
+        callback(error,null);
+    });
+}
 
-    function log(title, msg) {
-        console.log('*************** ' + title + ' *************');
-        console.log(msg);
-        console.log('*************** ' + title + ' End*************');
-    }
+function log(title, msg) {
+    console.log('*************** ' + title + ' *************');
+    console.log(msg);
+    console.log('*************** ' + title + ' End*************');
+}
