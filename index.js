@@ -26,7 +26,7 @@
                 // Get ThermostatController Endpoint State and pass to evalData
                 var endpointId = event.directive.endpoint.endpointId;
                 var oauth_id = event.directive.endpoint.scope.token;
-                request.get('https://nr-alexav3-dev.cb-net.co.uk/api/v1/getstate/'+ endpointId,{
+                request.get('https://nr-alexav3.cb-net.co.uk/api/v1/getstate/'+ endpointId,{
                     auth: {
                         'bearer': oauth_id
                     },
@@ -72,7 +72,7 @@
         var messageId = event.directive.header.messageId;
         var correlationToken = event.directive.header.correlationToken;
         // https request to the WebAPI to get deviceState
-        request.get('https://nr-alexav3-dev.cb-net.co.uk/api/v1/getstate/'+ endpointId,{
+        request.get('https://nr-alexav3.cb-net.co.uk/api/v1/getstate/'+ endpointId,{
             auth: {
                 'bearer': oauth_id
             },
@@ -144,7 +144,7 @@
             var message_id = event.directive.header.messageId;
             var oauth_id = event.directive.payload.scope.token;
             //https request to the WebAPI
-            request.get('https://nr-alexav3-dev.cb-net.co.uk/api/v1/devices',{
+            request.get('https://nr-alexav3.cb-net.co.uk/api/v1/devices',{
                 auth: {
                     'bearer': oauth_id
                 },
@@ -229,7 +229,7 @@
         var oauth_id = event.directive.endpoint.scope.token;
 
         // Execute command
-        request.post('https://nr-alexav3-dev.cb-net.co.uk/api/v1/command',{
+        request.post('https://nr-alexav3.cb-net.co.uk/api/v1/command',{
             json: event,
             auth: {
                 bearer: oauth_id
