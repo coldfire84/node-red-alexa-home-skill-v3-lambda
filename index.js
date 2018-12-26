@@ -346,7 +346,7 @@ function command(event, evalData, context, callback) {
             // Build Channel Controller Response Context
             if (namespace == "Alexa.ChannelController") {
                 if (name == "ChangeChannel") { 
-                    if (event.directive.payload.channel.number) {
+                    if (event.directive.payload.channel.hasOwnProperty('number')) {
                     var contextResult = {
                     "properties": [
                         {
@@ -360,7 +360,7 @@ function command(event, evalData, context, callback) {
                         }
                       ]}
                     }
-                    else if (event.directive.payload.channel.callSign) {
+                    else if (event.directive.payload.channel.hasOwnProperty('callSign')) {
                         var contextResult = {
                             "properties": [
                                 {
