@@ -1,5 +1,5 @@
 var request = require('request');
-var debug = true;
+var debug = false;
 
 exports.handler = function(event, context, callback) {
     //log("Entry", event);
