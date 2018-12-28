@@ -110,6 +110,27 @@ function report(event, context, callback) {
 
             callback(null,response);
         }
+        else if (response.statusCode == 429) {
+            var response = {
+                "event": {
+                    "header": {
+                      "namespace": "Alexa",
+                      "name": "ErrorResponse",
+                      "messageId": messageId,
+                      "correlationToken": correlationToken,
+                      "payloadVersion": "3"
+                    },
+                    "endpoint":{
+                        "endpointId": endpointId
+                    },
+                    "payload": {
+                      "type": "RATE_LIMIT_EXCEEDED",
+                      "message": "Unable to reach endpoint because Node-RED Bridge appears to be offline"
+                    }
+                  }
+                }
+            callback(error, response);
+        }
     }).on('error', function(error){
             if (debug == true) {
                 log('ReportState',"error: " + error)
