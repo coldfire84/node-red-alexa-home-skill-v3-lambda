@@ -40,8 +40,8 @@ exports.handler = function(event, context, callback) {
                     var properties = JSON.parse(data);
                     // Assess getstat API reposne for endpoint and extract current value
                     properties.forEach(function(element){
-                        if (element.name === "targetSetpoint" && namespace === 'Alexa.ThermostatController' ) {evalData = element.value.value}
-                        if (element.name === "percentage" && namespace === 'Alexa.PercentageController') {evalData = element.value.value}
+                        if (element.name === "targetSetpoint" && namespace === 'Alexa.ThermostatController' ) {evalData = element.value.value};
+                        if (element.name === "percentage" && namespace === 'Alexa.PercentageController') {evalData = element.value.value};
                     });
                     // Pass current value as evalData to command function
                     if (debug == true && evalData) {log("Command evalData:" + evalData)};
@@ -472,8 +472,9 @@ function command(event, evalData, context, callback) {
                             "value": percentage,
                             "timeOfSample": dt.toISOString(),
                             "uncertaintyInMilliseconds": 500
-                        }]
-                    };
+                            }]
+                        };
+                    }
                 }
             }
 
