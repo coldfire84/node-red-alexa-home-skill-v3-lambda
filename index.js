@@ -12,6 +12,7 @@ exports.handler = function(event, context, callback) {
     else if (event.directive.header.namespace === 'Alexa.PowerController' 
         || event.directive.header.namespace === 'Alexa.PlaybackController'
         || event.directive.header.namespace === 'Alexa.ChannelController'  
+        || event.directive.header.namespace === 'Alexa.Speaker' 
         || event.directive.header.namespace === 'Alexa.StepSpeaker' 
         || event.directive.header.namespace === 'Alexa.SceneController' 
         || event.directive.header.namespace === 'Alexa.InputController' 
@@ -398,13 +399,53 @@ function command(event, evalData, context, callback) {
                 }
             }
 
-            // Build PlaybackController/ StepSpeaker Response Context
-            if (namespace == "Alexa.PlaybackController" || namespace == "Alexa.StepSpeaker") {
+            // Build Speaker Response Context
+            if (namespace == "Alexa.Speaker") {
+                if (name == "SetVolume") {
+                    var contextResult = {
+                        "properties": [
+                            {
+                            "namespace": "Alexa.Speaker",
+                            "name": "volume",
+                            "value":  event.directive.payload.volume,
+                            "timeOfSample": dt.toISOString(),
+                            "uncertaintyInMilliseconds": 50
+                            }
+                        ]}
+                    }
+                else if (name == "SetMute") {
+                    var contextResult = {
+                        "properties": [
+                            {
+                                "namespace": "Alexa.Speaker",
+                                "name": "muted",
+                                "value": event.directive.payload.mute,
+                                "timeOfSample": dt.toISOString(),
+                                "uncertaintyInMilliseconds": 50
+                            }
+                        ]}
+                }
+                else {
+                    var contextResult = {
+                        "properties": []
+                    };
+                }
+            }
+
+            // Build StepSpeaker Response Context
+            if (namespace == "Alexa.StepSpeaker") {
+                var contextResult = {
+                    "properties": []
+                    };
+            }
+
+            // Build PlaybackController Response Context
+            if (namespace == "Alexa.PlaybackController") {
                 var contextResult = {
                     "properties": []
                 };
             }
-
+            
             // Build Scene Controller Activation Started Event
             if (namespace == "Alexa.SceneController") {
                 header.namespace = "Alexa.SceneController";
