@@ -9,18 +9,19 @@ exports.handler = function(event, context, callback) {
         discover(event, context, callback);
     } 
     // Device-specific directives
-    else if (event.directive.header.namespace === 'Alexa.PowerController' 
-        || event.directive.header.namespace === 'Alexa.PlaybackController'
-        || event.directive.header.namespace === 'Alexa.ChannelController'  
-        || event.directive.header.namespace === 'Alexa.Speaker' 
-        || event.directive.header.namespace === 'Alexa.StepSpeaker' 
-        || event.directive.header.namespace === 'Alexa.SceneController' 
-        || event.directive.header.namespace === 'Alexa.InputController' 
-        || event.directive.header.namespace === 'Alexa.ThermostatController' 
-        || event.directive.header.namespace === 'Alexa.BrightnessController' 
-        || event.directive.header.namespace === 'Alexa.ColorController' 
-        || event.directive.header.namespace === 'Alexa.ColorTemperatureController'
-        || event.directive.header.namespace === 'Alexa.LockController') {
+    else if (event.directive.header.namespace === 'Alexa.BrightnessController' 
+    || event.directive.header.namespace === 'Alexa.ChannelController'  
+    || event.directive.header.namespace === 'Alexa.ColorController' 
+    || event.directive.header.namespace === 'Alexa.ColorTemperatureController'
+    || event.directive.header.namespace === 'Alexa.InputController' 
+    || event.directive.header.namespace === 'Alexa.LockController'
+    || event.directive.header.namespace === 'Alexa.PercentageController'
+    || event.directive.header.namespace === 'Alexa.PlaybackController'
+    || event.directive.header.namespace === 'Alexa.PowerController'
+    || event.directive.header.namespace === 'Alexa.SceneController' 
+    || event.directive.header.namespace === 'Alexa.Speaker' 
+    || event.directive.header.namespace === 'Alexa.StepSpeaker'     
+    || event.directive.header.namespace === 'Alexa.ThermostatController') {
 
         // Pre-evaluation checks - any directives where you want to compare existing data should be called out here, i.e thermostatSetpoint
         var evalData;
@@ -54,6 +55,8 @@ exports.handler = function(event, context, callback) {
                     command(event, evalData, context, callback);
             });
         }
+        
+        // No pre-eval check required (you don't need to compare values to send correcty command response)
         else {command(event, evalData, context, callback);}
     }
     // State Reporting
@@ -292,19 +295,75 @@ function command(event, evalData, context, callback) {
                 "endpointId": endpointId
             }
         
-            // Build PowerController Response Context
-            if (namespace == "Alexa.PowerController") {
-                if (name == "TurnOn") {var newState = "ON"};
-                if (name == "TurnOff") {var newState = "OFF"};
-                var contextResult = {
-                    "properties": [{
-                        "namespace": "Alexa.PowerController",
-                        "name": "powerState",
-                        "value": newState,
-                        "timeOfSample": dt.toISOString(),
-                        "uncertaintyInMilliseconds": 50
-                    }]
+            // Build Brightness Controller Response Context
+            if (namespace == "Alexa.BrightnessController" && (name == "AdjustBrightness" || name == "SetBrightness")) {
+                if (name == "AdjustBrightness") {
+                    var brightness;
+                    if (event.directive.payload.brightnessDelta < 0) {
+                        brightness = event.directive.payload.brightnessDelta + 100;
+                    }
+                    else {
+                        brightness = event.directive.payload.brightnessDelta;
+                    }
+                    // Return Percentage Delta (NOT in-line with spec)
+                    var contextResult = {
+                        "properties": [{
+                            "namespace" : "Alexa.BrightnessController",
+                            "name": "brightness",
+                            "value": brightness,
+                            "timeOfSample": dt.toISOString(),
+                            "uncertaintyInMilliseconds": 50
+                        }]
+                    };
+
+                }
+                if (name == "SetBrightness") {
+                    // Return Percentage
+                    var contextResult = {
+                        "properties": [{
+                            "namespace" : "Alexa.BrightnessController",
+                            "name": "brightness",
+                            "value": event.directive.payload.brightness,
+                            "timeOfSample": dt.toISOString(),
+                            "uncertaintyInMilliseconds": 50
+                        }]
+                    }                
                 };
+
+            }
+
+            // Build Channel Controller Response Context
+            if (namespace == "Alexa.ChannelController") {
+                if (name == "ChangeChannel") { 
+                    if (event.directive.payload.channel.hasOwnProperty('number')) {
+                    var contextResult = {
+                    "properties": [
+                        {
+                          "namespace": "Alexa.ChannelController",
+                          "name": "channel",
+                          "value": {
+                            "number": event.directive.payload.channel.number
+                          },
+                          "timeOfSample": dt.toISOString(),
+                          "uncertaintyInMilliseconds": 50
+                        }
+                      ]}
+                    }
+                    else if (event.directive.payload.channel.hasOwnProperty('callSign')) {
+                        var contextResult = {
+                            "properties": [
+                                {
+                                "namespace": "Alexa.ChannelController",
+                                "name": "channel",
+                                "value": {
+                                    "callSign": event.directive.payload.channel.callSign                                
+                                },
+                                "timeOfSample": dt.toISOString(),
+                                "uncertaintyInMilliseconds": 50
+                                }
+                            ]}
+                    }
+                }
             }
 
             // ColorController
@@ -365,38 +424,81 @@ function command(event, evalData, context, callback) {
                 }
             }
 
-            // Build Channel Controller Response Context
-            if (namespace == "Alexa.ChannelController") {
-                if (name == "ChangeChannel") { 
-                    if (event.directive.payload.channel.hasOwnProperty('number')) {
+            // Build Lock Controller Response Context - SetThermostatMode
+            if (namespace == "Alexa.LockController") {
+                var lockState;
+                if (name == "Lock") {lockState = "LOCKED"};
+                if (name == "Unlock") {lockState = "UNLOCKED"};
+                var contextResult = {
+                    "properties": [{
+                    "namespace": "Alexa.LockController",
+                    "name": "lockState",
+                    "value": lockState,
+                    "timeOfSample": dt.toISOString(),
+                    "uncertaintyInMilliseconds": 500
+                    }]
+                };
+            }
+
+            // Build PercentageController Response Context
+            if (namespace == "Alexa.PercentageController") {
+                if (name == "SetPercentage") {
                     var contextResult = {
-                    "properties": [
-                        {
-                          "namespace": "Alexa.ChannelController",
-                          "name": "channel",
-                          "value": {
-                            "number": event.directive.payload.channel.number
-                          },
-                          "timeOfSample": dt.toISOString(),
-                          "uncertaintyInMilliseconds": 50
-                        }
-                      ]}
-                    }
-                    else if (event.directive.payload.channel.hasOwnProperty('callSign')) {
-                        var contextResult = {
-                            "properties": [
-                                {
-                                "namespace": "Alexa.ChannelController",
-                                "name": "channel",
-                                "value": {
-                                    "callSign": event.directive.payload.channel.callSign                                
-                                },
-                                "timeOfSample": dt.toISOString(),
-                                "uncertaintyInMilliseconds": 50
-                                }
-                            ]}
-                    }
+                        "properties": [{
+                            "namespace": "Alexa.PercentageController",
+                            "name": "percentage",
+                            "value": event.directive.payload.percentage,
+                            "timeOfSample": dt.toISOString(),
+                            "uncertaintyInMilliseconds": 500
+                        }]
+                    };
                 }
+                if (name == "AdjustPercentage") {
+                    var contextResult = {
+                        "properties": [{
+                            "namespace": "Alexa.PercentageController",
+                            "name": "percentage",
+                            "value": event.directive.payload.percentageDelta,
+                            "timeOfSample": dt.toISOString(),
+                            "uncertaintyInMilliseconds": 500
+                        }]
+                    };
+                }
+            }
+
+            // Build PlaybackController Response Context
+            if (namespace == "Alexa.PlaybackController") {
+                var contextResult = {
+                    "properties": []
+                };
+            }
+
+            // Build PowerController Response Context
+            if (namespace == "Alexa.PowerController") {
+                if (name == "TurnOn") {var newState = "ON"};
+                if (name == "TurnOff") {var newState = "OFF"};
+                var contextResult = {
+                    "properties": [{
+                        "namespace": "Alexa.PowerController",
+                        "name": "powerState",
+                        "value": newState,
+                        "timeOfSample": dt.toISOString(),
+                        "uncertaintyInMilliseconds": 50
+                    }]
+                };
+            }
+
+            // Build Scene Controller Activation Started Event
+            if (namespace == "Alexa.SceneController") {
+                header.namespace = "Alexa.SceneController";
+                header.name = "ActivationStarted";
+                var contextResult = {};
+                var payload = {
+                        "cause" : {
+                            "type" : "VOICE_INTERACTION"
+                            },
+                        "timestamp": dt.toISOString()
+                        };
             }
 
             // Build Speaker Response Context
@@ -438,64 +540,7 @@ function command(event, evalData, context, callback) {
                     "properties": []
                     };
             }
-
-            // Build PlaybackController Response Context
-            if (namespace == "Alexa.PlaybackController") {
-                var contextResult = {
-                    "properties": []
-                };
-            }
-            
-            // Build Scene Controller Activation Started Event
-            if (namespace == "Alexa.SceneController") {
-                header.namespace = "Alexa.SceneController";
-                header.name = "ActivationStarted";
-                var contextResult = {};
-                var payload = {
-                        "cause" : {
-                            "type" : "VOICE_INTERACTION"
-                            },
-                        "timestamp": dt.toISOString()
-                        };
-            }
-
-            // Build Brightness Controller Response Context
-            if (namespace == "Alexa.BrightnessController" && (name == "AdjustBrightness" || name == "SetBrightness")) {
-                if (name == "AdjustBrightness") {
-                    var brightness;
-                    if (event.directive.payload.brightnessDelta < 0) {
-                        brightness = event.directive.payload.brightnessDelta + 100;
-                    }
-                    else {
-                        brightness = event.directive.payload.brightnessDelta;
-                    }
-                    // Return Percentage Delta (NOT in-line with spec)
-                    var contextResult = {
-                        "properties": [{
-                            "namespace" : "Alexa.BrightnessController",
-                            "name": "brightness",
-                            "value": brightness,
-                            "timeOfSample": dt.toISOString(),
-                            "uncertaintyInMilliseconds": 50
-                        }]
-                    };
-
-                }
-                if (name == "SetBrightness") {
-                    // Return Percentage
-                    var contextResult = {
-                        "properties": [{
-                            "namespace" : "Alexa.BrightnessController",
-                            "name": "brightness",
-                            "value": event.directive.payload.brightness,
-                            "timeOfSample": dt.toISOString(),
-                            "uncertaintyInMilliseconds": 50
-                        }]
-                    }                
-                };
-
-            }
-
+           
             //Build Thermostat Controller Response Context - AdjustTargetTemperature/ SetTargetTemperature
             if (namespace == "Alexa.ThermostatController" 
                 && (name == "AdjustTargetTemperature" || name == "SetTargetTemperature" || name == "SetThermostatMode")) {
@@ -555,22 +600,6 @@ function command(event, evalData, context, callback) {
                     "timeOfSample": dt.toISOString(),
                     "uncertaintyInMilliseconds": 500
                 }]
-                };
-            }
-
-            // Build Lock Controller Response Context - SetThermostatMode
-            if (namespace == "Alexa.LockController") {
-                var lockState;
-                if (name == "Lock") {lockState = "LOCKED"};
-                if (name == "Unlock") {lockState = "UNLOCKED"};
-                var contextResult = {
-                    "properties": [{
-                    "namespace": "Alexa.LockController",
-                    "name": "lockState",
-                    "value": lockState,
-                    "timeOfSample": dt.toISOString(),
-                    "uncertaintyInMilliseconds": 500
-                    }]
                 };
             }
 
