@@ -41,7 +41,7 @@ exports.handler = function(event, context, callback) {
                     // Assess getstat API reposne for endpoint and extract current value
                     properties.forEach(function(element){
                         if (element.name === "targetSetpoint" && namespace === 'Alexa.ThermostatController' ) {evalData = element.value.value};
-                        if (element.name === "percentage" && namespace === 'Alexa.PercentageController') {evalData = element.value.value};
+                        if (element.name === "percentage" && namespace === 'Alexa.PercentageController') {evalData = element.value};
                     });
                     // Pass current value as evalData to command function
                     if (debug == true && evalData) {log("Command evalData:" + evalData)};
@@ -458,23 +458,20 @@ function command(event, evalData, context, callback) {
                 }
                 if (name == "AdjustPercentage") {
                     var percentage;
-                    if (evalData && event.directive.payload.percentageDelta > 0) {
-                        if (evalData + percentageDelta > 100) {percentage = 100}
-                        else {percentage = evalData + percentageDelta};
-                    }
-                    else {
-                        if (evalData - percentageDelta < 0) {percentage = 0}
-                        else {percentage = evalData - percentageDelta}
-                    var contextResult = {
-                        "properties": [{
-                            "namespace": "Alexa.PercentageController",
-                            "name": "percentage",
-                            "value": percentage,
-                            "timeOfSample": dt.toISOString(),
-                            "uncertaintyInMilliseconds": 500
-                            }]
-                        };
-                    }
+                    if (evalData) {
+                        if (evalData + event.directive.payload.percentageDelta > 100) {percentage = 100}
+                        else if (evalData - event.directive.payload.percentageDelta < 0) {percentage = 0}
+                        else {percentage = evalData + event.directive.payload.percentageDelta}
+                        var contextResult = {
+                            "properties": [{
+                                "namespace": "Alexa.PercentageController",
+                                "name": "percentage",
+                                "value": percentage,
+                                "timeOfSample": dt.toISOString(),
+                                "uncertaintyInMilliseconds": 500
+                                }]
+                            };
+                        }
                 }
             }
 
