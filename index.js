@@ -23,10 +23,11 @@ exports.handler = function(event, context, callback) {
     || event.directive.header.namespace === 'Alexa.StepSpeaker'     
     || event.directive.header.namespace === 'Alexa.ThermostatController') {
 
-        // Pre-evaluation checks - any directives where you want to compare existing data should be called out here, i.e thermostatSetpoint
+        // Pre-evaluation checks - any directives where you want to compare existing state data should be called out here, i.e thermostatSetpoint
         var evalData;
-        if (event.directive.header.namespace === 'Alexa.ThermostatController') {
-            // Get ThermostatController Endpoint State and pass to evalData
+        var namespace = event.directive.header.namespace;
+        if (namespace === 'Alexa.ThermostatController' || namespace === 'Alexa.PercentageController') {
+            // Use getstat API extract current relevant endpoint state value
             var endpointId = event.directive.endpoint.endpointId;
             var oauth_id = event.directive.endpoint.scope.token;
             request.get("https://" + process.env.WEB_API_HOSTNAME +"/api/v1/getstate/"+ endpointId,{
@@ -37,21 +38,23 @@ exports.handler = function(event, context, callback) {
             },function(error, response, data){
                 if (response.statusCode == 200) {
                     var properties = JSON.parse(data);
+                    // Assess getstat API reposne for endpoint and extract current value
                     properties.forEach(function(element){
-                        if (element.name == "targetSetpoint") {evalData = element.value.value}
+                        if (element.name === "targetSetpoint" && namespace === 'Alexa.ThermostatController' ) {evalData = element.value.value}
+                        if (element.name === "percentage" && namespace === 'Alexa.PercentageController') {evalData = element.value.value}
                     });
-
-                    if (debug == true && evalData) {log("Thermostat evalData:" + evalData)};
+                    // Pass current value as evalData to command function
+                    if (debug == true && evalData) {log("Command evalData:" + evalData)};
                     command(event, evalData, context, callback);    
                 }
                 else {
-                    // Request Failed, targetSetPoint will be empty
-                    if (debug == true) {log("Thermostat temp retrieval FAILED with response code:" + response.statusCode)};
+                    // Request evalData failed, targetSetPoint will be empty
+                    if (debug == true) {log("Command evalData retrieval FAILED with response code:" + response.statusCode)};
                     command(event, evalData, context, callback);
                 }                       
             }).on('error', function(error){
-                    // Request Failed, targetSetPoint will be empty
-                    if (debug == true) {log("Thermostat temp retrieval FAILED")};
+                    // Request evalData failed, targetSetPoint will be empty
+                    if (debug == true) {log("Command evalData retrieval FAILED")};
                     command(event, evalData, context, callback);
             });
         }
@@ -454,11 +457,19 @@ function command(event, evalData, context, callback) {
                     };
                 }
                 if (name == "AdjustPercentage") {
+                    var percentage;
+                    if (evalData && event.directive.payload.percentageDelta > 0) {
+                        if (evalData + percentageDelta > 100) {percentage = 100}
+                        else {percentage = evalData + percentageDelta};
+                    }
+                    else {
+                        if (evalData - percentageDelta < 0) {percentage = 0}
+                        else {percentage = evalData - percentageDelta}
                     var contextResult = {
                         "properties": [{
                             "namespace": "Alexa.PercentageController",
                             "name": "percentage",
-                            "value": event.directive.payload.percentageDelta,
+                            "value": percentage,
                             "timeOfSample": dt.toISOString(),
                             "uncertaintyInMilliseconds": 500
                         }]
