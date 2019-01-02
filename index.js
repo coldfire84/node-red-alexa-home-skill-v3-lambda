@@ -10,7 +10,7 @@ exports.handler = function(event, context, callback) {
     } 
     // Device-specific directives
     else if (event.directive.header.namespace === 'Alexa.BrightnessController' 
-    || event.directive.header.namespace === 'Alexa.ChannelController'  
+    || (event.directive.header.namespace === 'Alexa.ChannelController' && event.directive.header.name !== 'SkipChannels')
     || event.directive.header.namespace === 'Alexa.ColorController' 
     || event.directive.header.namespace === 'Alexa.ColorTemperatureController'
     || event.directive.header.namespace === 'Alexa.InputController' 
@@ -68,6 +68,34 @@ exports.handler = function(event, context, callback) {
     }
     else {
         if (debug == true) {log("Unhandled", event)};
+        var oauth_id = event.directive.endpoint.scope.token;
+        var endpointId = event.directive.endpoint.endpointId;
+        var messageId = event.directive.header.messageId;
+        var correlationToken = event.directive.header.correlationToken;
+        var response = {
+            event: {
+                header:{
+                    namespace: "Alexa",
+                    name: "ErrorResponse",
+                    messageId: messageId,
+                    correlationToken: correlationToken,
+                    payloadVersion: "3"
+                },
+                endpoint: {
+                    scope: {
+                        type: "BearerToken",
+                        BearerToken: oauth_id
+                    },
+                    endpointId : endpointId,
+                },
+                payload:{
+                    type: "INVALID_DIRECTIVE",
+                    message: "Command or directive not supported by this endpoint"
+                }
+            }
+        };
+        //context.failed(response);
+        callback(null, response);
     }
 };
 
