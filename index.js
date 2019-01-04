@@ -1,5 +1,5 @@
 var request = require('request');
-var debug = false;
+var debug = true;
 
 exports.handler = function(event, context, callback) {
     //log("Entry", event);
@@ -26,7 +26,7 @@ exports.handler = function(event, context, callback) {
         // Pre-evaluation checks - any directives where you want to compare existing state data should be called out here, i.e thermostatSetpoint
         var evalData;
         var namespace = event.directive.header.namespace;
-        if (namespace === 'Alexa.ThermostatController' || namespace === 'Alexa.PercentageController') {
+        if (namespace === 'Alexa.ThermostatController' || namespace === 'Alexa.PercentageController' || namespace === 'Alexa.Speaker') {
             // Use getstat API extract current relevant endpoint state value
             var endpointId = event.directive.endpoint.endpointId;
             var oauth_id = event.directive.endpoint.scope.token;
@@ -40,11 +40,12 @@ exports.handler = function(event, context, callback) {
                     var properties = JSON.parse(data);
                     // Assess getstat API reposne for endpoint and extract current value
                     properties.forEach(function(element){
-                        if (element.name === "targetSetpoint" && namespace === 'Alexa.ThermostatController' ) {evalData = element.value.value};
+                        if (element.name === "targetSetpoint" && namespace === 'Alexa.ThermostatController' ) {evalData = element.value};
                         if (element.name === "percentage" && namespace === 'Alexa.PercentageController') {evalData = element.value};
+                        if (element.name === "volume" && namespace === 'Alexa.Speaker') {evalData = element.value};
                     });
                     // Pass current value as evalData to command function
-                    if (debug == true && evalData) {log("Command evalData:" + evalData)};
+                    if (debug == true && evalData) {log("Command evalData:" + JSON.stringify(evalData))};
                     command(event, evalData, context, callback);    
                 }
                 else {
@@ -581,13 +582,22 @@ function command(event, evalData, context, callback) {
             //Build Thermostat Controller Response Context - AdjustTargetTemperature/ SetTargetTemperature
             if (namespace == "Alexa.ThermostatController" 
                 && (name == "AdjustTargetTemperature" || name == "SetTargetTemperature" || name == "SetThermostatMode")) {
-
                 if (name == "AdjustTargetTemperature") {
+                    var newTemp;
+                    var scale;
+                    if (evalData.hasOwnProperty('value') && evalData.hasOwnProperty('scale')) {
+                        newTemp = evalData.value + event.directive.payload.targetSetpointDelta.value;
+                        scale = evalData.scale;
+                    }
+                    else {
+                        newTemp = event.directive.payload.targetSetpointDelta.value;
+                        scale = event.directive.payload.targetSetpointDelta.scale;
+                    }
                     if (event.directive.payload.targetSetpointDelta.value > 0) {var mode = "HEAT"};
                     if (event.directive.payload.targetSetpointDelta.value < 0) {var mode = "COOL"};
-                        var targetSetPointValue = {
-                        "value": event.directive.payload.targetSetpointDelta.value,
-                        "scale": event.directive.payload.targetSetpointDelta.scale
+                    var targetSetPointValue = {
+                        "value": newTemp,
+                        "scale": scale
                     };
                 }
                 else if (name == "SetTargetTemperature") {
