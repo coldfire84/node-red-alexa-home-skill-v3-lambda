@@ -23,45 +23,46 @@ exports.handler = function(event, context, callback) {
     || event.directive.header.namespace === 'Alexa.StepSpeaker'     
     || event.directive.header.namespace === 'Alexa.ThermostatController') {
 
-        // Pre-evaluation checks - any directives where you want to compare existing state data should be called out here, i.e thermostatSetpoint
-        var evalData;
-        var namespace = event.directive.header.namespace;
-        if (namespace === 'Alexa.ThermostatController' || namespace === 'Alexa.PercentageController' || namespace === 'Alexa.Speaker') {
-            // Use getstat API extract current relevant endpoint state value
-            var endpointId = event.directive.endpoint.endpointId;
-            var oauth_id = event.directive.endpoint.scope.token;
-            request.get("https://" + process.env.WEB_API_HOSTNAME +"/api/v1/getstate/"+ endpointId,{
-                auth: {
-                    'bearer': oauth_id
-                },
-                timeout: 2000
-            },function(error, response, data){
-                if (response.statusCode == 200) {
-                    var properties = JSON.parse(data);
-                    // Assess getstat API reposne for endpoint and extract current value
-                    properties.forEach(function(element){
-                        if (element.name === "targetSetpoint" && namespace === 'Alexa.ThermostatController' ) {evalData = element.value};
-                        if (element.name === "percentage" && namespace === 'Alexa.PercentageController') {evalData = element.value};
-                        if (element.name === "volume" && namespace === 'Alexa.Speaker') {evalData = element.value};
-                    });
-                    // Pass current value as evalData to command function
-                    if (debug == true && evalData) {log("Command evalData:" + JSON.stringify(evalData))};
-                    command(event, evalData, context, callback);    
-                }
-                else {
-                    // Request evalData failed, targetSetPoint will be empty
-                    if (debug == true) {log("Command evalData retrieval FAILED with response code:" + response.statusCode)};
-                    command(event, evalData, context, callback);
-                }                       
-            }).on('error', function(error){
-                    // Request evalData failed, targetSetPoint will be empty
-                    if (debug == true) {log("Command evalData retrieval FAILED")};
-                    command(event, evalData, context, callback);
-            });
-        }
+        // //Pre-evaluation checks - any directives where you want to compare existing state data should be called out here, i.e thermostatSetpoint
+        // var evalData;
+        // var namespace = event.directive.header.namespace;
+        // if (namespace === 'Alexa.ThermostatController' || namespace === 'Alexa.PercentageController' || namespace === 'Alexa.Speaker') {
+        //     // //Use getstat API extract current relevant endpoint state value
+        //     var endpointId = event.directive.endpoint.endpointId;
+        //     var oauth_id = event.directive.endpoint.scope.token;
+        //     request.get("https://" + process.env.WEB_API_HOSTNAME +"/api/v1/getstate/"+ endpointId,{
+        //         auth: {
+        //             'bearer': oauth_id
+        //         },
+        //         timeout: 2000
+        //     },function(error, response, data){
+        //         if (response.statusCode == 200) {
+        //             var properties = JSON.parse(data);
+        //             // //Assess getstat API reposne for endpoint and extract current value
+        //             properties.forEach(function(element){
+        //                 if (element.name === "targetSetpoint" && namespace === 'Alexa.ThermostatController' ) {evalData = element.value};
+        //                 if (element.name === "percentage" && namespace === 'Alexa.PercentageController') {evalData = element.value};
+        //                 if (element.name === "volume" && namespace === 'Alexa.Speaker') {evalData = element.value};
+        //             });
+        //             // //Pass current value as evalData to command function
+        //             if (debug == true && evalData) {log("Command evalData:" + JSON.stringify(evalData))};
+        //             command(event, evalData, context, callback);    
+        //         }
+        //         else {
+        //             // //Request evalData failed, targetSetPoint will be empty
+        //             if (debug == true) {log("Command evalData retrieval FAILED with response code:" + response.statusCode)};
+        //             command(event, evalData, context, callback);
+        //         }                       
+        //     }).on('error', function(error){
+        //             // //Request evalData failed, targetSetPoint will be empty
+        //             if (debug == true) {log("Command evalData retrieval FAILED")};
+        //             command(event, evalData, context, callback);
+        //     });
+        // }
         
-        // No pre-eval check required (you don't need to compare values to send correcty command response)
-        else {command(event, evalData, context, callback);}
+        // // No pre-eval check required (you don't need to compare values to send correcty command response)
+       // else {command(event, evalData, context, callback);}
+        command2(event, context, callback);
     }
     // State Reporting
     else if (event.directive.header.namespace === 'Alexa' && event.directive.header.name === 'ReportState') {
@@ -278,6 +279,161 @@ function discover(event, context, callback) {
             callback(error, response);
         });
     }
+}
+
+// Command2 Function
+function command2(event, context, callback) {
+    if (debug == true) {log('Command:', JSON.stringify(event))};
+    var oauth_id = event.directive.endpoint.scope.token;
+    // Execute command
+    request.post("https://" + process.env.WEB_API_HOSTNAME + "/api/v1/command2",{
+        json: event,
+        auth: {
+            bearer: oauth_id
+        },
+        timeout: 2000
+    }, function(err, resp, data){
+        if(err) {
+            if (debug == true) {log("command error", err)};
+        }
+
+        //log("Event", JSON.stringify(event));
+        var endpointId = event.directive.endpoint.endpointId;
+        var messageId = event.directive.header.messageId;
+        var oauth_id = event.directive.endpoint.scope.token;
+        var correlationToken = event.directive.header.correlationToken;
+        var dt = new Date();
+        var name = event.directive.header.name;
+        var namespace = event.directive.header.namespace;
+
+        if (resp.statusCode === 200) { 
+            if (debug == true) {log("Response", JSON.stringify(data))};
+
+            //context.succeed(response);
+            callback(null, data);
+        }
+        else if (resp.statusCode === 401) {
+            if (debug == true) {log('command', "Auth failure")};
+            var response = {
+                event: {
+                    header:{
+                        namespace: "Alexa",
+                        name: "ErrorResponse",
+                        messageId: messageId,
+                        payloadVersion: "3"
+                    },
+                    payload:{
+                        type: "INVALID_AUTHORIZATION_CREDENTIAL",
+                        message: "Authentication failure."
+                    }
+                }
+            };
+            //context.succeed(response);
+            callback(null, response);
+        }
+        // No Such Endpoint Response
+        else if (resp.statusCode === 404) {
+            if (debug == true) {log('command', "No such device or endpoint!")};
+            var response = {
+                event: {
+                    header:{
+                        namespace: "Alexa",
+                        name: "ErrorResponse",
+                        messageId: messageId,
+                        correlationToken: correlationToken,
+                        payloadVersion: "3"
+                    },
+                    endpoint: {
+                        scope: {
+                            type: "BearerToken",
+                            BearerToken: oauth_id
+                            },
+                        endpointId : endpointId,
+                    },
+                    payload:{
+                        type: "NO_SUCH_ENDPOINT	",
+                        message: "No such device or endpoint!"
+                    }
+                }
+            };
+            //context.succeed(response);
+            callback(null, response);
+        }
+        // TEMPERATURE_VALUE_OUT_OF_RANGE Response
+        else if (resp.statusCode === 416) {
+            if (debug == true) {log('command', "TEMPERATURE_VALUE_OUT_OF_RANGE Failure")};
+            var response = {
+                event: {
+                    header:{
+                        namespace: "Alexa",
+                        name: "ErrorResponse",
+                        messageId: messageId,
+                        correlationToken: correlationToken,
+                        payloadVersion: "3"
+                    },
+                    endpoint: {
+                        scope: {
+                            type: "BearerToken",
+                            BearerToken: oauth_id
+                        },
+                        endpointId : endpointId,
+                    },
+                    payload:{
+                        type: "TEMPERATURE_VALUE_OUT_OF_RANGE",
+                        message: "The requested temperature is out of range."
+                    }
+                }
+            };
+            //context.succeed(response);
+            callback(null, response);
+        }
+        // VALUE_OUT_OF_RANGE Response
+        else if (resp.statusCode === 417) {
+            if (debug == true) {log('command', "VALUE_OUT_OF_RANGE Failure")};
+            var response = {
+                event: {
+                    header:{
+                        namespace: "Alexa",
+                        name: "ErrorResponse",
+                        messageId: messageId,
+                        correlationToken: correlationToken,
+                        payloadVersion: "3"
+                    },
+                    endpoint: {
+                        scope: {
+                            type: "BearerToken",
+                            BearerToken: oauth_id
+                        },
+                        endpointId : endpointId,
+                    },
+                    payload:{
+                        type: "VALUE_OUT_OF_RANGE",
+                        message: "The requested value is out of range."
+                    }
+                }
+            };
+            //context.succeed(response);
+            callback(null, response);
+        }
+    }).on('error', function(){
+        var response = { 
+            event: {
+                header:{
+                    namespace: "Alexa",
+                    name: "ErrorResponse",
+                    messageId: messageId,
+                    payloadVersion: "3"
+                },
+                payload:{
+                    type: "ENDPOINT_UNREACHABLE",
+                    message: "Target endpoint unavailable."
+                }
+            }
+        };
+        if (debug == true) {log("Command",JSON.stringify(response))};
+        //context.fail(response);
+        callback(error,null);
+    });
 }
 
 // Command Function
@@ -585,9 +741,12 @@ function command(event, evalData, context, callback) {
                 if (name == "AdjustTargetTemperature") {
                     var newTemp;
                     var scale;
-                    if (evalData.hasOwnProperty('value') && evalData.hasOwnProperty('scale')) {
-                        newTemp = evalData.value + event.directive.payload.targetSetpointDelta.value;
-                        scale = evalData.scale;
+                    if (evalData){
+                        if (debug == true) {log("AdjustTargetTemperature provided evalData:" + JSON.stringify(evalData))};
+                        if (evalData.hasOwnProperty('value') && evalData.hasOwnProperty('scale')) {
+                            newTemp = evalData.value + event.directive.payload.targetSetpointDelta.value;
+                            scale = evalData.scale;
+                        }
                     }
                     else {
                         newTemp = event.directive.payload.targetSetpointDelta.value;
@@ -601,9 +760,12 @@ function command(event, evalData, context, callback) {
                     };
                 }
                 else if (name == "SetTargetTemperature") {
-                    if (debug == true) {log("Provided evalData:" + evalData)};
-                    if (evalData && event.directive.payload.targetSetpoint.value > evalData) {var mode = "HEAT"}
-                    else if (evalData && event.directive.payload.targetSetpoint.value < evalData) {var mode = "COOL"}
+                    if (evalData){
+                        if (debug == true) {log("SetTargetTemperature provided evalData:" + JSON.stringify(evalData))};
+                        if (event.directive.payload.targetSetpoint.value > evalData.value) {var mode = "HEAT"}
+                        else if (event.directive.payload.targetSetpoint.value < evalData.value) {var mode = "COOL"}
+                        else {var mode = "HEAT"} // Fallback
+                    }
                     else {var mode = "HEAT"}
                     var targetSetPointValue = {
                         "value": event.directive.payload.targetSetpoint.value,
