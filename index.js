@@ -1,5 +1,5 @@
 var request = require('request');
-var debug = true;
+var debug = false;
 
 exports.handler = function(event, context, callback) {
     //log("Entry", event);
@@ -23,46 +23,7 @@ exports.handler = function(event, context, callback) {
     || event.directive.header.namespace === 'Alexa.StepSpeaker'     
     || event.directive.header.namespace === 'Alexa.ThermostatController') {
 
-        // //Pre-evaluation checks - any directives where you want to compare existing state data should be called out here, i.e thermostatSetpoint
-        // var evalData;
-        // var namespace = event.directive.header.namespace;
-        // if (namespace === 'Alexa.ThermostatController' || namespace === 'Alexa.PercentageController' || namespace === 'Alexa.Speaker') {
-        //     // //Use getstat API extract current relevant endpoint state value
-        //     var endpointId = event.directive.endpoint.endpointId;
-        //     var oauth_id = event.directive.endpoint.scope.token;
-        //     request.get("https://" + process.env.WEB_API_HOSTNAME +"/api/v1/getstate/"+ endpointId,{
-        //         auth: {
-        //             'bearer': oauth_id
-        //         },
-        //         timeout: 2000
-        //     },function(error, response, data){
-        //         if (response.statusCode == 200) {
-        //             var properties = JSON.parse(data);
-        //             // //Assess getstat API reposne for endpoint and extract current value
-        //             properties.forEach(function(element){
-        //                 if (element.name === "targetSetpoint" && namespace === 'Alexa.ThermostatController' ) {evalData = element.value};
-        //                 if (element.name === "percentage" && namespace === 'Alexa.PercentageController') {evalData = element.value};
-        //                 if (element.name === "volume" && namespace === 'Alexa.Speaker') {evalData = element.value};
-        //             });
-        //             // //Pass current value as evalData to command function
-        //             if (debug == true && evalData) {log("Command evalData:" + JSON.stringify(evalData))};
-        //             command(event, evalData, context, callback);    
-        //         }
-        //         else {
-        //             // //Request evalData failed, targetSetPoint will be empty
-        //             if (debug == true) {log("Command evalData retrieval FAILED with response code:" + response.statusCode)};
-        //             command(event, evalData, context, callback);
-        //         }                       
-        //     }).on('error', function(error){
-        //             // //Request evalData failed, targetSetPoint will be empty
-        //             if (debug == true) {log("Command evalData retrieval FAILED")};
-        //             command(event, evalData, context, callback);
-        //     });
-        // }
-        
-        // // No pre-eval check required (you don't need to compare values to send correcty command response)
-       // else {command(event, evalData, context, callback);}
-        command2(event, context, callback);
+        command(event, context, callback);
     }
     // State Reporting
     else if (event.directive.header.namespace === 'Alexa' && event.directive.header.name === 'ReportState') {
@@ -116,6 +77,9 @@ function report(event, context, callback) {
         },
         timeout: 2000
     },function(err, response, body){
+        if(err) {
+            if (debug == true) {log("report error", err)};
+        }
         if (response.statusCode == 200) {
             var properties = JSON.parse(body);
             if (debug == true) {log('ReportState', JSON.stringify(response))};
@@ -166,7 +130,7 @@ function report(event, context, callback) {
                     }
                   }
                 }
-            callback(error, response);
+            callback(null, response);
         }
     }).on('error', function(error){
             if (debug == true) {
@@ -200,8 +164,10 @@ function report(event, context, callback) {
 function discover(event, context, callback) {
     if (debug == true) {log("Discover", JSON.stringify(event))};
     if (event.directive.header.name === 'Discover') {
-        var message_id = event.directive.header.messageId;
-        var oauth_id = event.directive.payload.scope.token;
+        var oauth_id = event.directive.endpoint.scope.token;
+        var endpointId = event.directive.endpoint.endpointId;
+        var correlationToken = event.directive.header.correlationToken;
+        var messageId = event.directive.header.messageId;
         //https request to the WebAPI
         request.get("https://" + process.env.WEB_API_HOSTNAME + "/api/v1/devices",{
             auth: {
@@ -211,6 +177,9 @@ function discover(event, context, callback) {
         },function(err, response, body){
             //log("Discover body", body);
             // Updated for smart-home v3 skill syntax
+            if(err) {
+                if (debug == true) {log("Discover error", err)};
+            }
             if (response.statusCode == 200) {
                 var payload = {
                     endpoints: JSON.parse(body)
@@ -221,7 +190,7 @@ function discover(event, context, callback) {
                             namespace: "Alexa.Discovery",
                             name: "Discover.Response",
                             payloadVersion: "3",
-                            messageId: message_id
+                            messageId: messageId
                         },
                         payload: payload
                     }
@@ -239,7 +208,7 @@ function discover(event, context, callback) {
                         header:{
                             namespace: "Alexa",
                             name: "ErrorResponse",
-                            messageId: message_id,
+                            messageId: messageId,
                             payloadVersion: "3"
                         },
                         payload:{
@@ -281,10 +250,16 @@ function discover(event, context, callback) {
     }
 }
 
-// Command2 Function
-function command2(event, context, callback) {
+// Command Function
+function command(event, context, callback) {
     if (debug == true) {log('Command:', JSON.stringify(event))};
     var oauth_id = event.directive.endpoint.scope.token;
+    //log("Event", JSON.stringify(event));
+    var endpointId = event.directive.endpoint.endpointId;
+    var messageId = event.directive.header.messageId;
+    var oauth_id = event.directive.endpoint.scope.token;
+    var correlationToken = event.directive.header.correlationToken;
+
     // Execute command
     request.post("https://" + process.env.WEB_API_HOSTNAME + "/api/v1/command2",{
         json: event,
@@ -297,11 +272,6 @@ function command2(event, context, callback) {
             if (debug == true) {log("command error", err)};
         }
 
-        //log("Event", JSON.stringify(event));
-        var endpointId = event.directive.endpoint.endpointId;
-        var messageId = event.directive.header.messageId;
-        var oauth_id = event.directive.endpoint.scope.token;
-        var correlationToken = event.directive.header.correlationToken;
         var dt = new Date();
         var name = event.directive.header.name;
         var namespace = event.directive.header.namespace;
@@ -415,7 +385,7 @@ function command2(event, context, callback) {
             //context.succeed(response);
             callback(null, response);
         }
-    }).on('error', function(){
+    }).on('error', function(error){
         var response = { 
             event: {
                 header:{
@@ -435,6 +405,59 @@ function command2(event, context, callback) {
         callback(error,null);
     });
 }
+
+function log(title, msg) {
+    console.log('*************** ' + title + ' *************');
+    console.log(msg);
+    console.log('*************** ' + title + ' End*************');
+}
+
+/* 
+
+///////////////////////////////////////// Legacy Command Function /Logic
+This code sits below definition of supported interfaces
+
+        // //Pre-evaluation checks - any directives where you want to compare existing state data should be called out here, i.e thermostatSetpoint
+        // var evalData;
+        // var namespace = event.directive.header.namespace;
+        // if (namespace === 'Alexa.ThermostatController' || namespace === 'Alexa.PercentageController' || namespace === 'Alexa.Speaker') {
+        //     // //Use getstat API extract current relevant endpoint state value
+        //     var endpointId = event.directive.endpoint.endpointId;
+        //     var oauth_id = event.directive.endpoint.scope.token;
+        //     request.get("https://" + process.env.WEB_API_HOSTNAME +"/api/v1/getstate/"+ endpointId,{
+        //         auth: {
+        //             'bearer': oauth_id
+        //         },
+        //         timeout: 2000
+        //     },function(error, response, data){
+        //         if (response.statusCode == 200) {
+        //             var properties = JSON.parse(data);
+        //             // //Assess getstat API reposne for endpoint and extract current value
+        //             properties.forEach(function(element){
+        //                 if (element.name === "targetSetpoint" && namespace === 'Alexa.ThermostatController' ) {evalData = element.value};
+        //                 if (element.name === "percentage" && namespace === 'Alexa.PercentageController') {evalData = element.value};
+        //                 if (element.name === "volume" && namespace === 'Alexa.Speaker') {evalData = element.value};
+        //             });
+        //             // //Pass current value as evalData to command function
+        //             if (debug == true && evalData) {log("Command evalData:" + JSON.stringify(evalData))};
+        //             command(event, evalData, context, callback);    
+        //         }
+        //         else {
+        //             // //Request evalData failed, targetSetPoint will be empty
+        //             if (debug == true) {log("Command evalData retrieval FAILED with response code:" + response.statusCode)};
+        //             command(event, evalData, context, callback);
+        //         }                       
+        //     }).on('error', function(error){
+        //             // //Request evalData failed, targetSetPoint will be empty
+        //             if (debug == true) {log("Command evalData retrieval FAILED")};
+        //             command(event, evalData, context, callback);
+        //     });
+        // }
+        
+        // // No pre-eval check required (you don't need to compare values to send correcty command response)
+       // else {command(event, evalData, context, callback);}
+
+//////////////////////////////////////////
 
 // Command Function
 function command(event, evalData, context, callback) {
@@ -965,9 +988,4 @@ function command(event, evalData, context, callback) {
         callback(error,null);
     });
 }
-
-function log(title, msg) {
-    console.log('*************** ' + title + ' *************');
-    console.log(msg);
-    console.log('*************** ' + title + ' End*************');
-}
+ */
