@@ -130,6 +130,7 @@ function report(event, context, callback) {
                     }
                   }
                 }
+            if (debug == true) {log('ReportState throttled, response:', JSON.stringify(response))};
             callback(null, response);
         }
     }).on('error', function(error){
@@ -164,8 +165,7 @@ function report(event, context, callback) {
 function discover(event, context, callback) {
     if (debug == true) {log("Discover", JSON.stringify(event))};
     if (event.directive.header.name === 'Discover') {
-        var oauth_id = event.directive.endpoint.scope.token;
-        var endpointId = event.directive.endpoint.endpointId;
+        var oauth_id = event.directive.payload.scope.token;
         var correlationToken = event.directive.header.correlationToken;
         var messageId = event.directive.header.messageId;
         //https request to the WebAPI
@@ -180,69 +180,69 @@ function discover(event, context, callback) {
             if(err) {
                 if (debug == true) {log("Discover error", err)};
             }
-            if (response.statusCode == 200) {
-                var payload = {
-                    endpoints: JSON.parse(body)
-                };
-                var response = {
-                    event:{
-                        header:{
-                            namespace: "Alexa.Discovery",
-                            name: "Discover.Response",
-                            payloadVersion: "3",
-                            messageId: messageId
-                        },
-                        payload: payload
-                    }
-                };
-                if (debug == true) {log('Discovery', JSON.stringify(response))};
-
-                //context.succeed(response);
-                callback(null,response);
-
-            // Updated for smart-home v3 skill syntax
-            } else if (response.statusCode == 401) {
-                if (debug == true) {log('Discovery', "Auth failure")};
-                var response = {
-                    event: {
-                        header:{
-                            namespace: "Alexa",
-                            name: "ErrorResponse",
-                            messageId: messageId,
-                            payloadVersion: "3"
-                        },
-                        payload:{
-                            type: "INVALID_AUTHORIZATION_CREDENTIAL",
-                            message: "Authentication failure."
+            if(!err) {
+            //////////////////////////////
+                if (response.statusCode == 200) {
+                    var payload = {
+                        endpoints: JSON.parse(body)
+                    };
+                    var response = {
+                        event:{
+                            header:{
+                                namespace: "Alexa.Discovery",
+                                name: "Discover.Response",
+                                payloadVersion: "3",
+                                messageId: messageId
+                            },
+                            payload: payload
                         }
-                    }
-                };
-                //context.succeed(response);
-                callback(null,response);
+                    };
+                    if (debug == true) {log('Discovery', JSON.stringify(response))};
+
+                    //context.succeed(response);
+                    callback(null,response);
+
+                // Updated for smart-home v3 skill syntax
+                } else if (response.statusCode == 401) {
+                    if (debug == true) {log('Discovery', "Auth failure")};
+                    var response = {
+                        event: {
+                            header:{
+                                namespace: "Alexa",
+                                name: "ErrorResponse",
+                                messageId: messageId,
+                                payloadVersion: "3"
+                            },
+                            payload:{
+                                type: "INVALID_AUTHORIZATION_CREDENTIAL",
+                                message: "Authentication failure."
+                            }
+                        }
+                    };
+                    //context.succeed(response);
+                    callback(null,response);
+                }
+            //////////////////////////////
             }
 
         }).on('error', function(error){
             if (debug == true) {
                 log('Discovery',"error: " + error)
-                var response = {
-                    "event": {
-                        "header": {
-                          "namespace": "Alexa",
-                          "name": "ErrorResponse",
-                          "messageId": messageId,
-                          "correlationToken": correlationToken,
-                          "payloadVersion": "3"
-                        },
-                        "endpoint":{
-                            "endpointId": endpointId
-                        },
-                        "payload": {
-                          "type": "BRIDGE_UNREACHABLE",
-                          "message": "Unable to reach endpoint because Node-RED Bridge appears to be offline"
-                        }
-                      }
+            };
+            var response = { 
+                event: {
+                    header:{
+                        namespace: "Alexa",
+                        name: "ErrorResponse",
+                        messageId: messageId,
+                        payloadVersion: "3"
+                    },
+                    payload:{
+                        type: "ENDPOINT_UNREACHABLE",
+                        message: "Target endpoint unavailable."
                     }
-        };
+                }
+            };
             //other error
             //context.fail(error);
             callback(error, response);
@@ -270,121 +270,145 @@ function command(event, context, callback) {
     }, function(err, resp, data){
         if(err) {
             if (debug == true) {log("command error", err)};
-        }
-
-        var dt = new Date();
-        var name = event.directive.header.name;
-        var namespace = event.directive.header.namespace;
-
-        if (resp.statusCode === 200) { 
-            if (debug == true) {log("Response", JSON.stringify(data))};
-
-            //context.succeed(response);
-            callback(null, data);
-        }
-        else if (resp.statusCode === 401) {
-            if (debug == true) {log('command', "Auth failure")};
             var response = {
-                event: {
-                    header:{
-                        namespace: "Alexa",
-                        name: "ErrorResponse",
-                        messageId: messageId,
-                        payloadVersion: "3"
+                "event": {
+                    "header": {
+                      "namespace": "Alexa",
+                      "name": "ErrorResponse",
+                      "messageId": messageId,
+                      "correlationToken": correlationToken,
+                      "payloadVersion": "3"
                     },
-                    payload:{
-                        type: "INVALID_AUTHORIZATION_CREDENTIAL",
-                        message: "Authentication failure."
+                    "endpoint":{
+                        "endpointId": endpointId
+                    },
+                    "payload": {
+                      "type": "BRIDGE_UNREACHABLE",
+                      "message": "Unable to reach endpoint because Node-RED Bridge appears to be offline"
                     }
+                  }
                 }
-            };
-            //context.succeed(response);
-            callback(null, response);
+            callback(err, response);
         }
-        // No Such Endpoint Response
-        else if (resp.statusCode === 404) {
-            if (debug == true) {log('command', "No such device or endpoint!")};
-            var response = {
-                event: {
-                    header:{
-                        namespace: "Alexa",
-                        name: "ErrorResponse",
-                        messageId: messageId,
-                        correlationToken: correlationToken,
-                        payloadVersion: "3"
-                    },
-                    endpoint: {
-                        scope: {
-                            type: "BearerToken",
-                            BearerToken: oauth_id
+
+        if (!err) {
+        ///////////////////////////////////////////////////
+            var dt = new Date();
+            var name = event.directive.header.name;
+            var namespace = event.directive.header.namespace;
+
+            if (resp.statusCode === 200) { 
+                if (debug == true) {log("Response", JSON.stringify(data))};
+
+                //context.succeed(response);
+                callback(null, data);
+            }
+            else if (resp.statusCode === 401) {
+                if (debug == true) {log('command', "Auth failure")};
+                var response = {
+                    event: {
+                        header:{
+                            namespace: "Alexa",
+                            name: "ErrorResponse",
+                            messageId: messageId,
+                            payloadVersion: "3"
+                        },
+                        payload:{
+                            type: "INVALID_AUTHORIZATION_CREDENTIAL",
+                            message: "Authentication failure."
+                        }
+                    }
+                };
+                //context.succeed(response);
+                callback(null, response);
+            }
+            // No Such Endpoint Response
+            else if (resp.statusCode === 404) {
+                if (debug == true) {log('command', "No such device or endpoint!")};
+                var response = {
+                    event: {
+                        header:{
+                            namespace: "Alexa",
+                            name: "ErrorResponse",
+                            messageId: messageId,
+                            correlationToken: correlationToken,
+                            payloadVersion: "3"
+                        },
+                        endpoint: {
+                            scope: {
+                                type: "BearerToken",
+                                BearerToken: oauth_id
+                                },
+                            endpointId : endpointId,
+                        },
+                        payload:{
+                            type: "NO_SUCH_ENDPOINT	",
+                            message: "No such device or endpoint!"
+                        }
+                    }
+                };
+                //context.succeed(response);
+                callback(null, response);
+            }
+            // TEMPERATURE_VALUE_OUT_OF_RANGE Response
+            else if (resp.statusCode === 416) {
+                if (debug == true) {log('command', "TEMPERATURE_VALUE_OUT_OF_RANGE Failure")};
+                var response = {
+                    event: {
+                        header:{
+                            namespace: "Alexa",
+                            name: "ErrorResponse",
+                            messageId: messageId,
+                            correlationToken: correlationToken,
+                            payloadVersion: "3"
+                        },
+                        endpoint: {
+                            scope: {
+                                type: "BearerToken",
+                                BearerToken: oauth_id
                             },
-                        endpointId : endpointId,
-                    },
-                    payload:{
-                        type: "NO_SUCH_ENDPOINT	",
-                        message: "No such device or endpoint!"
-                    }
-                }
-            };
-            //context.succeed(response);
-            callback(null, response);
-        }
-        // TEMPERATURE_VALUE_OUT_OF_RANGE Response
-        else if (resp.statusCode === 416) {
-            if (debug == true) {log('command', "TEMPERATURE_VALUE_OUT_OF_RANGE Failure")};
-            var response = {
-                event: {
-                    header:{
-                        namespace: "Alexa",
-                        name: "ErrorResponse",
-                        messageId: messageId,
-                        correlationToken: correlationToken,
-                        payloadVersion: "3"
-                    },
-                    endpoint: {
-                        scope: {
-                            type: "BearerToken",
-                            BearerToken: oauth_id
+                            endpointId : endpointId,
                         },
-                        endpointId : endpointId,
-                    },
-                    payload:{
-                        type: "TEMPERATURE_VALUE_OUT_OF_RANGE",
-                        message: "The requested temperature is out of range."
+                        payload:{
+                            type: "TEMPERATURE_VALUE_OUT_OF_RANGE",
+                            message: "The requested temperature is out of range."
+                        }
                     }
-                }
-            };
-            //context.succeed(response);
-            callback(null, response);
-        }
-        // VALUE_OUT_OF_RANGE Response
-        else if (resp.statusCode === 417) {
-            if (debug == true) {log('command', "VALUE_OUT_OF_RANGE Failure")};
-            var response = {
-                event: {
-                    header:{
-                        namespace: "Alexa",
-                        name: "ErrorResponse",
-                        messageId: messageId,
-                        correlationToken: correlationToken,
-                        payloadVersion: "3"
-                    },
-                    endpoint: {
-                        scope: {
-                            type: "BearerToken",
-                            BearerToken: oauth_id
+                };
+                //context.succeed(response);
+                callback(null, response);
+            }
+            // VALUE_OUT_OF_RANGE Response
+            else if (resp.statusCode === 417) {
+                if (debug == true) {log('command', "VALUE_OUT_OF_RANGE Failure")};
+                var response = {
+                    event: {
+                        header:{
+                            namespace: "Alexa",
+                            name: "ErrorResponse",
+                            messageId: messageId,
+                            correlationToken: correlationToken,
+                            payloadVersion: "3"
                         },
-                        endpointId : endpointId,
-                    },
-                    payload:{
-                        type: "VALUE_OUT_OF_RANGE",
-                        message: "The requested value is out of range."
+                        endpoint: {
+                            scope: {
+                                type: "BearerToken",
+                                BearerToken: oauth_id
+                            },
+                            endpointId : endpointId,
+                        },
+                        payload:{
+                            type: "VALUE_OUT_OF_RANGE",
+                            message: "The requested value is out of range."
+                        }
                     }
-                }
-            };
-            //context.succeed(response);
-            callback(null, response);
+                };
+                //context.succeed(response);
+                callback(null, response);
+            }
+        ///////////////////////////////////////////////////
         }
+
     }).on('error', function(error){
         var response = { 
             event: {
