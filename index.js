@@ -2,13 +2,17 @@ var request = require('request');
 var debug = false;
 
 exports.handler = function(event, context, callback) {
-    //log("Entry", event);
-    // Discovery
-    if (event.directive.header.namespace === 'Alexa.Discovery') {
+    // Authorization   
+    if (event.directive.header.namespace === "Alexa.Authorization") {
+        //log("Entry", event.directive.payload);
+        auth(event, context, callback);
+    }
+    // Discover
+    else if (event.directive.header.namespace === 'Alexa.Discovery') {
         //log("Entry", event.directive.payload);
         discover(event, context, callback);
     } 
-    // Device-specific directives
+    // Command w/ device-specific directives
     else if (event.directive.header.namespace === 'Alexa.BrightnessController' 
     || (event.directive.header.namespace === 'Alexa.ChannelController' && event.directive.header.name !== 'SkipChannels')
     || event.directive.header.namespace === 'Alexa.ColorController' 
@@ -160,6 +164,72 @@ function report(event, context, callback) {
             callback(error, response);
         });
 }
+
+// Authorization Function
+function auth(event, context, callback) {
+    if (debug == true) {log("Authorization", JSON.stringify(event))};
+    if (event.directive.header.name === 'AcceptGrant') {
+        var oauth_id = event.directive.payload.grantee.token;
+        var messageId = event.directive.header.messageId;
+        //https request to the WebAPI
+        request.post("https://" + process.env.WEB_API_HOSTNAME + "/api/v1/authorization",{
+            auth: {
+                'bearer': oauth_id
+            },
+            json: event,
+            timeout: 2000
+        },function(err, response, body){
+            if(err) {
+                if (debug == true) {log("Authorization", "error", err)};
+            }
+            else {
+                if (response.statusCode == 200) {
+                    //context.succeed(response);
+                    callback(null,body);
+                }
+                else {
+                    var failure = {
+                        event: {
+                            header: {
+                                messageId: messageId,
+                                namespace: "Alexa.Authorization",
+                                name: "ErrorResponse",
+                                payloadVersion: "3"
+                            },
+                            payload: {
+                                type: "ACCEPT_GRANT_FAILED",
+                                message: "Failed to handle the AcceptGrant directive"
+                            }
+                        }
+                    };
+                    //context.failed(failure);
+                    callback(null,failure);
+                }
+            }
+        }).on('error', function(error){
+            if (debug == true) {
+                log('Authorization',"error: " + error)
+            };
+            var failure = {
+                event: {
+                    header: {
+                        messageId: messageId,
+                        namespace: "Alexa.Authorization",
+                        name: "ErrorResponse",
+                        payloadVersion: "3"
+                    },
+                    payload: {
+                        type: "ACCEPT_GRANT_FAILED",
+                        message: "Failed to handle the AcceptGrant directive"
+                    }
+                }
+            };
+            //other error
+            //context.fail(error);
+            callback(error, failure);
+        });
+    }
+};
 
 // Discover Function
 function discover(event, context, callback) {
