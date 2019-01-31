@@ -22,6 +22,7 @@ exports.handler = function(event, context, callback) {
     || event.directive.header.namespace === 'Alexa.PercentageController'
     || event.directive.header.namespace === 'Alexa.PlaybackController'
     || event.directive.header.namespace === 'Alexa.PowerController'
+    || event.directive.header.namespace === 'Alexa.RangeController'
     || event.directive.header.namespace === 'Alexa.SceneController' 
     || event.directive.header.namespace === 'Alexa.Speaker' 
     || event.directive.header.namespace === 'Alexa.StepSpeaker'     
