@@ -1,6 +1,6 @@
 {
   "name": "node-red-smart-home-skill-v3-lambda",
-  "version": "0.0.1",
+  "version": "0.2.0",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -11,6 +11,6 @@
   "author": "chrismbradford@gmail.com",
   "license": "Apache-2.0",
   "dependencies": {
-    "request": "^2.88.0"
+    "axios": "^0.21.0"
   }
 }
