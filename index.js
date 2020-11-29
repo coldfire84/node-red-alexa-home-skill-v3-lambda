@@ -1,8 +1,14 @@
-var request = require('request');
+const Request = require('request');
+var discoveryDebug = true;
 var debug = false;
 
+const request = Request.defaults({
+  agent: false,
+  pool: {maxSockets: 100}
+})
+
 exports.handler = function(event, context, callback) {
-    // Authorization   
+    // Authorization
     if (event.directive.header.namespace === "Alexa.Authorization") {
         //log("Entry", event.directive.payload);
         auth(event, context, callback);
@@ -11,21 +17,21 @@ exports.handler = function(event, context, callback) {
     else if (event.directive.header.namespace === 'Alexa.Discovery') {
         //log("Entry", event.directive.payload);
         discover(event, context, callback);
-    } 
+    }
     // Command w/ device-specific directives
-    else if (event.directive.header.namespace === 'Alexa.BrightnessController' 
+    else if (event.directive.header.namespace === 'Alexa.BrightnessController'
     || (event.directive.header.namespace === 'Alexa.ChannelController' && event.directive.header.name !== 'SkipChannels')
-    || event.directive.header.namespace === 'Alexa.ColorController' 
+    || event.directive.header.namespace === 'Alexa.ColorController'
     || event.directive.header.namespace === 'Alexa.ColorTemperatureController'
-    || event.directive.header.namespace === 'Alexa.InputController' 
+    || event.directive.header.namespace === 'Alexa.InputController'
     || event.directive.header.namespace === 'Alexa.LockController'
     || event.directive.header.namespace === 'Alexa.PercentageController'
     || event.directive.header.namespace === 'Alexa.PlaybackController'
     || event.directive.header.namespace === 'Alexa.PowerController'
     || event.directive.header.namespace === 'Alexa.RangeController'
-    || event.directive.header.namespace === 'Alexa.SceneController' 
-    || event.directive.header.namespace === 'Alexa.Speaker' 
-    || event.directive.header.namespace === 'Alexa.StepSpeaker'     
+    || event.directive.header.namespace === 'Alexa.SceneController'
+    || event.directive.header.namespace === 'Alexa.Speaker'
+    || event.directive.header.namespace === 'Alexa.StepSpeaker'
     || event.directive.header.namespace === 'Alexa.ThermostatController') {
 
         command(event, context, callback);
@@ -92,7 +98,7 @@ function report(event, context, callback) {
             // Build RequestState Response
             var response = {};
             response.event = {
-                "header":{  
+                "header":{
                     "messageId":messageId,
                     "correlationToken":correlationToken,
                     "namespace":"Alexa",
@@ -107,11 +113,11 @@ function report(event, context, callback) {
                 "endpointId":endpointId,
                 "cookie": {}
                 }
-            }    
+            }
             response.context = {};
             response.context.properties = properties;
-            response.payload = {};       
-            
+            response.payload = {};
+
             if (debug == true) {log('ReportState Response', JSON.stringify(response))};
 
             callback(null,response);
@@ -234,7 +240,7 @@ function auth(event, context, callback) {
 
 // Discover Function
 function discover(event, context, callback) {
-    if (debug == true) {log("Discover", JSON.stringify(event))};
+    if (discoveryDebug ==true || debug == true) {log("Discover", JSON.stringify(event))};
     if (event.directive.header.name === 'Discover') {
         var oauth_id = event.directive.payload.scope.token;
         var correlationToken = event.directive.header.correlationToken;
@@ -249,7 +255,7 @@ function discover(event, context, callback) {
             //log("Discover body", body);
             // Updated for smart-home v3 skill syntax
             if(err) {
-                if (debug == true) {log("Discover error", err)};
+                if (discoveryDebug ==true || debug == true) {log("Discover error", err)};
             }
             if(!err) {
             //////////////////////////////
@@ -268,14 +274,14 @@ function discover(event, context, callback) {
                             payload: payload
                         }
                     };
-                    if (debug == true) {log('Discovery', JSON.stringify(response))};
+                    if (discoveryDebug ==true || debug == true) {log('Discovery', JSON.stringify(response))};
 
                     //context.succeed(response);
                     callback(null,response);
 
                 // Updated for smart-home v3 skill syntax
                 } else if (response.statusCode == 401) {
-                    if (debug == true) {log('Discovery', "Auth failure")};
+                    if (discoveryDebug ==true || debug == true) {log('Discovery', "Auth failure")};
                     var response = {
                         event: {
                             header:{
@@ -297,10 +303,10 @@ function discover(event, context, callback) {
             }
 
         }).on('error', function(error){
-            if (debug == true) {
+            if (discoveryDebug ==true || debug == true) {
                 log('Discovery',"error: " + error)
             };
-            var response = { 
+            var response = {
                 event: {
                     header:{
                         namespace: "Alexa",
@@ -368,7 +374,7 @@ function command(event, context, callback) {
             var name = event.directive.header.name;
             var namespace = event.directive.header.namespace;
 
-            if (resp.statusCode === 200) { 
+            if (resp.statusCode === 200) {
                 if (debug == true) {log("Response", JSON.stringify(data))};
 
                 //context.succeed(response);
@@ -481,7 +487,7 @@ function command(event, context, callback) {
         }
 
     }).on('error', function(error){
-        var response = { 
+        var response = {
             event: {
                 header:{
                     namespace: "Alexa",
