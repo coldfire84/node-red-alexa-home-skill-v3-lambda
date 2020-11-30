@@ -62,6 +62,7 @@ async function authorize(event, context) {
                     }
                 }
             };
+            if (debug == true) log(messageId, "Authorization ERROR", e.message);
             return failure;
         }
     }
@@ -81,14 +82,16 @@ async function discover(event, context) {
                 method: 'get',
                 url: 'https://' + process.env.WEB_API_HOSTNAME + '/api/v1/devices',
                 headers: {
-                    'Authorization': 'Bearer ' + oauth_id,
-                    'Content-Type': 'application/json'
+                    'Authorization': 'Bearer ' + oauth_id
                 },
                 timeout: 1500
             });
             if (discoveryResponse.status == 200) {
+                //var payload = {
+                //    endpoints: JSON.parse(discoveryResponse.data)
+                //};
                 var payload = {
-                    endpoints: JSON.parse(discoveryResponse.data)
+                    endpoints: discoveryResponse.data
                 };
                 response = {
                     event:{
@@ -127,7 +130,7 @@ async function discover(event, context) {
     catch(e){
         // General failure
         if (e.response && e.response.data && e.response.status) {
-            if (debug == true) log("Discover error", e.response.status + ":" + e.response.data);
+            if (debug == true) log("Discovery ERROR", e.response.status + ":" + e.response.data);
         }
         response = {
             event: {
@@ -143,7 +146,7 @@ async function discover(event, context) {
                 }
             }
         };
-        if (debug == true) log(messageId, "Discovery ERROR", response);
+        if (debug == true) log(messageId, "Discovery ERROR", e.message + ": " + e.stack);
         return response;
     }
 }
@@ -321,6 +324,7 @@ async function command(event, context) {
         if (e.response && e.response.data && e.response.status) {
             if (debug == true) log(messageId, 'Command ERROR', e.response.status + " " + JSON.stringify(e.response.data));
         }
+        if (debug == true) log(messageId, "Command ERROR", e.message);
         return response;
     }
 }
@@ -340,14 +344,15 @@ async function getState (event, context) {
             method: 'get',
             url: 'https://' + process.env.WEB_API_HOSTNAME + '/api/v1/getstate/'+ endpointId,
             headers: {
-                'Authorization': 'Bearer ' + oauth_id,
-                'Content-Type': 'application/json'
+                'Authorization': 'Bearer ' + oauth_id
             },
             timeout: 1500
         });
         // Handle response
         if (stateReport.status == 200) {
-            var properties = JSON.parse(stateReport.data);
+            if (debug == true) log(messageId, "Get State API RESPONSE", stateReport);
+            // var properties = JSON.parse(stateReport.data);
+            var properties = stateReport.data;
             // Build RequestState Response
             response = {};
             response.event = {
@@ -440,6 +445,7 @@ async function getState (event, context) {
                 }
               }
             };
+        if (debug == true) log(messageId, "Get State ERROR", e.message + ": " + e.stack);
         return response;
     }
 }
